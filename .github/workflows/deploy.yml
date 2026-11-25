@@ -28,7 +28,7 @@ jobs:
         run: Rscript -e 'install.packages("shinylive")'
       - name: Export app
         run: |
-          mkdir -p _app && cp app.R images.csv _app/
+          mkdir -p _app && cp app.R images.csv _app/ && cp comments_url.txt _app/ 2>/dev/null || true
           Rscript -e 'shinylive::export("_app", "_site")'
       - uses: actions/upload-pages-artifact@v3
         with:

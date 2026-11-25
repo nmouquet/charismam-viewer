@@ -89,7 +89,7 @@ ui <- fluidPage(
       #big { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
              z-index: 9999; background: #fff; border: 1px solid #ccc; border-radius: 8px;
              box-shadow: 0 6px 30px rgba(0,0,0,.25); padding: 28px 12px 8px; cursor: zoom-out; }
-      #big img { display: block; max-width: min(500px, 85vw); max-height: 75vh; width: auto; height: auto; }
+      #big img { display: block; width: min(680px, 88vw, 78vh); height: auto; }
       #big .cap { margin-top: 8px; font-size: 15px; text-align: center; }
       #big .close { position: absolute; top: 2px; right: 10px; color: #666; font-size: 24px; line-height: 1; }
     ")),
