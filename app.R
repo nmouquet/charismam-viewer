@@ -63,7 +63,8 @@ ui <- fluidPage(
       h2.app-title { margin: 18px 0 4px; font-weight: 600; }
       .sub { color: #777; margin-bottom: 14px; }
       .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
-      .gallery.big { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+      .gallery.big { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+      .com-link { margin-left: 14px; font-weight: 600; }
       .card { margin: 0; background: #fff; border: 1px solid #e3e3e3; border-radius: 6px; overflow: hidden; }
       .card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #eee; cursor: zoom-in; }
       .card figcaption { padding: 6px 10px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; }
@@ -89,7 +90,7 @@ ui <- fluidPage(
       #big { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
              z-index: 9999; background: #fff; border: 1px solid #ccc; border-radius: 8px;
              box-shadow: 0 6px 30px rgba(0,0,0,.25); padding: 28px 12px 8px; cursor: zoom-out; }
-      #big img { display: block; width: min(680px, 88vw, 78vh); height: auto; }
+      #big img { display: block; width: min(820px, 92vw, 82vh); height: auto; }
       #big .cap { margin-top: 8px; font-size: 15px; text-align: center; }
       #big .close { position: absolute; top: 2px; right: 10px; color: #666; font-size: 24px; line-height: 1; }
     ")),
@@ -254,7 +255,11 @@ server <- function(input, output, session) {
         d <- img[img$species == input$species, ]
         d <- d[order(d$n, d$type), ]                 # all puis head, photo 1 puis 2
         tagList(div(class = "head", h3(tags$em(input$species)),
-                    span(class = "tax", sprintf("%s — %s", d$family[1], d$order[1]))),
+                    span(class = "tax", sprintf("%s — %s", d$family[1], d$order[1])),
+                    if (comments_url != "")
+                      tags$a(href = "#", class = "com-link",
+                             onclick = "document.querySelector('.com').scrollIntoView({behavior: 'smooth'}); return false;",
+                             HTML("&#128172; Laisser un commentaire &darr;"))),
                 gallery(d, big = TRUE))
       },
 
