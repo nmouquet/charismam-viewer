@@ -31,24 +31,24 @@ ord_tab <- ord_tab[order(ord_tab$order), ]
 
 ALL <- ""   # valeur "tous / toutes" dans les menus
 
-ord_choices <- function() c("Tous les ordres" = ALL,
+ord_choices <- function() c("All orders" = ALL,
   setNames(ord_tab$order, sprintf("%s (%d)", ord_tab$order, ord_tab$species)))
 fam_choices <- function(ord) {
   f <- if (ord == ALL) fam_tab else fam_tab[fam_tab$order == ord, ]
-  c("Toutes les familles" = ALL, setNames(f$family, sprintf("%s (%d)", f$family, f$species)))
+  c("All families" = ALL, setNames(f$family, sprintf("%s (%d)", f$family, f$species)))
 }
 sp_choices <- function(ord, fam) {
   s <- sp_tab
   if (ord != ALL) s <- s[s$order == ord, ]
   if (fam != ALL) s <- s[s$family == fam, ]
-  c("Tapez un nom..." = ALL, s$species)
+  c("Type a name..." = ALL, s$species)
 }
 
 # Vignette : image (clic = agrandir) + légende (espèce en italique, type de photo)
 card <- function(r) {
   cap <- sprintf("<i>%s</i> &mdash; %s", r$species, r$lab)
   tags$figure(class = "card",
-    tags$img(src = r$url, loading = "lazy", alt = r$species, title = "Agrandir",
+    tags$img(src = r$url, loading = "lazy", alt = r$species, title = "Enlarge",
              onclick = sprintf("showBig('%s', '%s')", r$url, cap)),
     tags$figcaption(tags$em(r$species), tags$span(class = "type", r$lab)))
 }
@@ -56,7 +56,7 @@ gallery <- function(d, big = FALSE)
   div(class = if (big) "gallery big" else "gallery", lapply(seq_len(nrow(d)), function(i) card(d[i, ])))
 
 ui <- fluidPage(
-  title = "CHARISMAM — visionneuse",
+  title = "CHARISMAM — image viewer",
   tags$head(
     tags$style(HTML("
       body { background: #fafafa; }
@@ -105,35 +105,35 @@ ui <- fluidPage(
       function esc(x) { var d = document.createElement('div'); d.textContent = x == null ? '' : String(x); return d.innerHTML; }
       function loadComments(sp) {
         var box = document.getElementById('com-list'); if (!box || !COMMENTS_URL) return;
-        box.innerHTML = '<span class=\"com-meta\">Chargement des commentaires...</span>';
+        box.innerHTML = '<span class=\"com-meta\">Loading comments...</span>';
         fetch(COMMENTS_URL + '?species=' + encodeURIComponent(sp))
           .then(function(r) { return r.json(); })
           .then(function(j) {
             var c = (j && j.comments) || [];
-            if (!c.length) { box.innerHTML = '<span class=\"com-meta\">Aucun commentaire pour l&#39;instant.</span>'; return; }
+            if (!c.length) { box.innerHTML = '<span class=\"com-meta\">No comments yet.</span>'; return; }
             box.innerHTML = c.map(function(x) {
               return '<div class=\"com-item\"><div class=\"com-meta\"><b>' + esc(x.name) + '</b> &middot; ' + esc(x.date) +
                      (x.photo ? ' &middot; ' + esc(x.photo) : '') + '</div><div class=\"com-text\">' + esc(x.comment) + '</div></div>';
             }).join('');
           })
-          .catch(function() { box.innerHTML = '<span class=\"com-meta\">Commentaires indisponibles pour le moment.</span>'; });
+          .catch(function() { box.innerHTML = '<span class=\"com-meta\">Comments are unavailable at the moment.</span>'; });
       }
       function sendComment(sp) {
         var name = document.getElementById('com-name').value.trim(),
             photo = document.getElementById('com-photo').value,
             text = document.getElementById('com-text').value.trim(),
             st = document.getElementById('com-status'), bt = document.getElementById('com-send');
-        if (!name || !text) { st.textContent = 'Nom et commentaire obligatoires.'; return; }
+        if (!name || !text) { st.textContent = 'Name and comment are required.'; return; }
         try { localStorage.setItem('charismam_name', name); } catch (e) {}
-        bt.disabled = true; st.textContent = 'Envoi...';
+        bt.disabled = true; st.textContent = 'Sending...';
         fetch(COMMENTS_URL, { method: 'POST', body: JSON.stringify({ species: sp, photo: photo, name: name, comment: text }) })
           .then(function(r) { return r.json(); })
           .then(function(j) {
             bt.disabled = false;
-            if (j && j.ok) { st.textContent = 'Merci, commentaire enregistré.'; document.getElementById('com-text').value = ''; loadComments(sp); }
-            else st.textContent = 'Erreur : ' + ((j && j.error) || 'inconnue');
+            if (j && j.ok) { st.textContent = 'Thank you, your comment has been saved.'; document.getElementById('com-text').value = ''; loadComments(sp); }
+            else st.textContent = 'Error: ' + ((j && j.error) || 'unknown');
           })
-          .catch(function() { bt.disabled = false; st.textContent = 'Envoi impossible, réessayer plus tard.'; });
+          .catch(function() { bt.disabled = false; st.textContent = 'Could not send, please try again later.'; });
       }
       function initComments(sp) {
         try { var n = localStorage.getItem('charismam_name'); if (n) document.getElementById('com-name').value = n; } catch (e) {}
@@ -151,19 +151,19 @@ ui <- fluidPage(
       span(class = "close", HTML("&times;")),
       tags$img(id = "big-img", src = ""), div(id = "big-cap", class = "cap")),
 
-  h2(class = "app-title", "CHARISMAM — visionneuse"),
-  div(class = "sub", sprintf("%d espèces, %d familles, %d ordres, %d photos — cliquer une photo pour la voir en grand",
+  h2(class = "app-title", "CHARISMAM — image viewer"),
+  div(class = "sub", sprintf("%d species, %d families, %d orders, %d photos — click a photo to enlarge it",
                              nrow(sp_tab), nrow(fam_tab), nrow(ord_tab), nrow(img))),
   sidebarLayout(
     sidebarPanel(width = 3,
-      selectizeInput("order",   "Ordre",   choices = ord_choices()),
-      selectizeInput("family",  "Famille", choices = fam_choices(ALL)),
-      selectizeInput("species", "Espèce",  choices = sp_choices(ALL, ALL),
-                     options = list(placeholder = "Tapez un nom...")),
-      radioButtons("mode", "Afficher",
-                   choices = c("L'espèce choisie" = "species",
-                               "Toute la famille" = "family",
-                               "Tout l'ordre"     = "order")),
+      selectizeInput("order",   "Order",   choices = ord_choices()),
+      selectizeInput("family",  "Family", choices = fam_choices(ALL)),
+      selectizeInput("species", "Species",  choices = sp_choices(ALL, ALL),
+                     options = list(placeholder = "Type a name...")),
+      radioButtons("mode", "Show",
+                   choices = c("Selected species" = "species",
+                               "Whole family"     = "family",
+                               "Whole order"      = "order")),
       uiOutput("sp_list")
     ),
     mainPanel(width = 9, uiOutput("gallery"), uiOutput("comments"))
@@ -216,7 +216,7 @@ server <- function(input, output, session) {
   output$sp_list <- renderUI({
     if (input$family == ALL) return(NULL)
     sp <- sp_tab$species[sp_tab$family == input$family]
-    tagList(tags$label(sprintf("Espèces de la famille (%d)", length(sp))),
+    tagList(tags$label(sprintf("Species in this family (%d)", length(sp))),
             div(class = "sp-list", lapply(sp, function(s)
               tags$a(href = "#", class = if (identical(s, input$species)) "current" else NULL,
                      onclick = sprintf("Shiny.setInputValue('go_sp', '%s', {priority: 'event'}); return false;", s),
@@ -229,19 +229,19 @@ server <- function(input, output, session) {
     sp <- input$species
     ph <- img[img$species == sp, ]; ph <- ph[order(ph$n, ph$type), ]
     div(class = "com",
-      h4("Commentaires sur ", tags$em(sp)),
+      h4("Comments on ", tags$em(sp)),
       div(id = "com-list"),
       div(class = "com-form",
         div(class = "row2",
-          tags$input(id = "com-name", type = "text", class = "form-control", placeholder = "Votre nom", maxlength = 80),
+          tags$input(id = "com-name", type = "text", class = "form-control", placeholder = "Your name", maxlength = 80),
           tags$select(id = "com-photo", class = "form-control",
-                      tags$option(value = "", "L'espèce en général"),
+                      tags$option(value = "", "The species in general"),
                       lapply(ph$lab, function(l) tags$option(value = l, paste("Photo", l))))),
         tags$textarea(id = "com-text", class = "form-control", style = "margin-top:8px",
-                      placeholder = "Votre commentaire", maxlength = 2000),
+                      placeholder = "Your comment", maxlength = 2000),
         div(style = "margin-top:8px",
           tags$button(id = "com-send", type = "button", class = "btn btn-primary",
-                      onclick = sprintf("sendComment('%s')", sp), "Envoyer"),
+                      onclick = sprintf("sendComment('%s')", sp), "Send"),
           tags$span(id = "com-status"))),
       tags$script(HTML(sprintf("setTimeout(function(){ initComments('%s'); }, 0);", sp))))
   })
@@ -251,7 +251,7 @@ server <- function(input, output, session) {
 
       species = {
         if (input$species == ALL)
-          return(div(class = "hint", "Cherchez une espèce par son nom, ou choisissez un ordre / une famille puis une espèce."))
+          return(div(class = "hint", "Search a species by name, or pick an order / a family and then a species."))
         d <- img[img$species == input$species, ]
         d <- d[order(d$n, d$type), ]                 # all puis head, photo 1 puis 2
         tagList(div(class = "head", h3(tags$em(input$species)),
@@ -259,26 +259,26 @@ server <- function(input, output, session) {
                     if (comments_url != "")
                       tags$a(href = "#", class = "com-link",
                              onclick = "document.querySelector('.com').scrollIntoView({behavior: 'smooth'}); return false;",
-                             HTML("&#128172; Laisser un commentaire &darr;"))),
+                             HTML("&#128172; Leave a comment &darr;"))),
                 gallery(d, big = TRUE))
       },
 
       family = {
         if (input$family == ALL)
-          return(div(class = "hint", "Choisissez une famille pour voir toutes ses photos."))
+          return(div(class = "hint", "Pick a family to see all its photos."))
         d  <- img[img$family == input$family, ]
         tagList(div(class = "head", h3(input$family),
-                    span(class = "tax", sprintf("%s — %d espèces, %d photos", d$order[1],
+                    span(class = "tax", sprintf("%s — %d species, %d photos", d$order[1],
                                                 length(unique(d$species)), nrow(d)))),
                 gallery(d))
       },
 
       order = {
         if (input$order == ALL)
-          return(div(class = "hint", "Choisissez un ordre pour voir toutes ses photos."))
+          return(div(class = "hint", "Pick an order to see all its photos."))
         d <- img[img$order == input$order, ]
         tagList(div(class = "head", h3(input$order),
-                    span(class = "tax", sprintf("%d familles, %d espèces, %d photos",
+                    span(class = "tax", sprintf("%d families, %d species, %d photos",
                                                 length(unique(d$family)), length(unique(d$species)), nrow(d)))),
                 lapply(sort(unique(d$family)), function(f)
                   tagList(div(class = "grp", f), gallery(d[d$family == f, ]))))
