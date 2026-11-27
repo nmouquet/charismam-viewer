@@ -5,19 +5,26 @@
 # Locally: shiny::runApp("app/viewer")
 #
 # WHAT THE APP DOES
-#   - browse the photos (all / head) by order, family or species; the species
-#     search always covers all species (Latin or common name); the display
-#     (species / family / order) follows the menus automatically
-#   - click on a photo: enlarged frame with two tabs
-#       Profile   species sheet (attention & range, IUCN, CITES, funding,
-#                 zoonoses, zoos and hazard to visitors, traits), with a
-#                 tooltip on each variable
+#   - browse the photos (all / head) by order, family or species (menus on one
+#     line above the photos); the species search always covers all species
+#     (Latin or common name); what is shown follows the menus: a species if one
+#     is chosen, otherwise the family, otherwise the order
+#   - sort the species (alphabetical, public or research attention) and show
+#     only the photos that have comments
+#   - click on a photo: enlarged frame with the photo credit (author, licence,
+#     source) and two tabs
+#       Profile   species sheet (attention, range & discovery, IUCN, CITES,
+#                 funding, zoonoses, zoos and hazard to visitors, traits), with
+#                 a tooltip on each variable; every bar is a rank among all
+#                 mammal species (full bar = highest value, "top x%" = share of
+#                 species above)
 #       Comments  visitors' comments on the photo and on the species
+#     keys: left / right arrow = previous / next photo, Esc = close
 #   - IUCN badge next to the name, badge with the number of comments on thumbnails
 #
 # FILES READ (all written by scripts/deploy_viewer.R — do not edit by hand)
 #   images.csv         one row per photo online (file, species, taxonomy,
-#                      English / French common names)
+#                      English / French common names, photo credit)
 #   species_info.csv   profile of each species (sources detailed in deploy_viewer.R)
 #   comments_url.txt   address of the Google Apps Script for comments (optional)
 # Photos are read directly from Scaleway (public bucket biodiful-bucket, folder
@@ -28,6 +35,7 @@
 # =============================================================================
 
 library(shiny)
+`%||%` <- function(a, b) if (is.null(a)) b else a
 
 base_url <- "https://biodiful-bucket.s3.fr-par.scw.cloud/charismam/pool/"
 
@@ -37,7 +45,7 @@ comments_url <- if (file.exists("comments_url.txt")) trimws(readLines("comments_
 if (is.na(comments_url)) comments_url <- ""
 
 img <- read.csv("images.csv", stringsAsFactors = FALSE, encoding = "UTF-8", na.strings = character())
-for (v in c("name_en", "name_fr")) if (!v %in% names(img)) img[[v]] <- ""
+for (v in c("name_en", "name_fr", "author", "license", "source_url")) if (!v %in% names(img)) img[[v]] <- ""
 # common name shown: "Moose · Élan" (empty if no known name)
 img$common <- mapply(function(a, b) {
   v <- c(a, b)[nzchar(c(a, b))]; v <- v[!duplicated(tolower(v))]   # "Jaguar · Jaguar" -> "Jaguar"
@@ -52,6 +60,8 @@ info <- if (file.exists("species_info.csv"))
   read.csv("species_info.csv", stringsAsFactors = FALSE, encoding = "UTF-8", na.strings = "") else NULL
 info_json <- if (is.null(info)) "[]" else jsonlite::toJSON(info, dataframe = "rows", na = "null", digits = NA)
 iucn_of <- function(sp) if (is.null(info)) NA else info$iucn_cat[match(sp, info$species)]
+# attention of each species, for the sort menu (NA last)
+att_of  <- function(sp, v) if (is.null(info) || !v %in% names(info)) rep(NA_real_, length(sp)) else info[[v]][match(sp, info$species)]
 iucn_names <- c(LC = "Least Concern", NT = "Near Threatened", VU = "Vulnerable", EN = "Endangered",
                 CR = "Critically Endangered", EW = "Extinct in the Wild", EX = "Extinct", DD = "Data Deficient")
 iucn_badge <- function(cat) if (is.na(cat) || !nzchar(cat)) NULL else
@@ -84,6 +94,7 @@ card <- function(r) {
   tags$figure(class = "card",
     tags$img(src = r$url, loading = "lazy", alt = r$species, title = "Enlarge / comment",
              `data-sp` = r$species, `data-lab` = r$lab, `data-common` = r$common,
+             `data-author` = r$author, `data-lic` = r$license, `data-src` = r$source_url,
              onclick = "showBigEl(this)"),
     tags$figcaption(div(class = "l1", tags$em(r$species), tags$span(class = "type", r$lab)),
                     if (nzchar(r$common)) div(class = "common", r$common)))
@@ -107,15 +118,20 @@ ui <- fluidPage(
       .common { color: #666; font-size: 12.5px; }
       .head .common { font-size: 15px; color: #555; margin: 2px 0; }
       #big .cap .common { font-size: 14px; }
-      .sp-list .common { font-size: 11.5px; color: #888; margin-left: 4px; }
       .card .type { color: #888; font-size: 12px; white-space: nowrap; }
       .head { margin: 4px 0 14px; }
       .head h3 { margin: 0; }
       .head .tax { color: #777; }
       .grp { margin: 22px 0 8px; font-size: 17px; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
-      .sp-list { max-height: 40vh; overflow-y: auto; }
-      .sp-list a { display: block; padding: 2px 0; }
-      .sp-list a.current { font-weight: 700; }
+      .filters { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: flex-end; }
+      .filters .form-group { margin-bottom: 4px; }
+      .filters .f-sel { width: 230px; } .filters .f-sp { width: 330px; } .filters .f-sort { width: 190px; }
+      .filters .f-chk { padding-bottom: 10px; }
+      .filters .checkbox { margin: 0; }
+      .sub { color: #777; margin: 2px 0 16px; }
+      #big .credit { font-size: 12px; color: #888; text-align: center; margin-top: 3px; }
+      #big .credit a { color: #888; text-decoration: underline; }
+      #big .nav { position: absolute; top: 4px; left: 14px; color: #999; font-size: 12px; }
       .hint { color: #888; margin-top: 40px; text-align: center; font-size: 16px; }
       #big { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
              z-index: 9999; background: #fff; border: 1px solid #ccc; border-radius: 8px;
@@ -166,13 +182,34 @@ ui <- fluidPage(
     tags$script(HTML(sprintf("
       var COMMENTS_URL = '%s', CUR = { sp: '', lab: '' };
       function esc(x) { var d = document.createElement('div'); d.textContent = x == null ? '' : String(x); return d.innerHTML; }
-      function showBigEl(el) { showBig(el.src, el.dataset.sp, el.dataset.lab, el.dataset.common); }
-      function showBig(src, sp, lab, common) {
+      var CUR_EL = null;
+      function showBigEl(el) { CUR_EL = el; showBig(el.src, el.dataset.sp, el.dataset.lab, el.dataset.common, el.dataset); }
+      // visible thumbnails, in page order (for the arrow keys)
+      function cards() { return Array.prototype.filter.call(document.querySelectorAll('.card img[data-sp]'), function(x) { return x.offsetParent !== null; }); }
+      function stepBig(d) {
+        var c = cards(), i = c.indexOf(CUR_EL);
+        if (i < 0 || !c.length) return;
+        showBigEl(c[(i + d + c.length) %% c.length]);
+      }
+      function creditHTML(ds) {
+        if (!ds) return '';
+        var a = ds.author || '', l = ds.lic || '', u = ds.src || '';
+        if (!a && !l && !u) return '';
+        var parts = [];
+        if (a) parts.push((l && l !== 'Public domain' ? '' : '&copy; ') + esc(a));
+        if (l) parts.push(esc(l));
+        if (u) parts.push('<a href=\"' + esc(u) + '\" target=\"_blank\" rel=\"noopener\">source</a>');
+        return 'Photo: ' + parts.join(' &middot; ');
+      }
+      function showBig(src, sp, lab, common, ds) {
         CUR = { sp: sp, lab: lab };
         document.getElementById('big-img').src = src;
         var ic = (window.INFO && INFO[sp] && INFO[sp].iucn_cat) ? ' ' + iucnBadge(INFO[sp].iucn_cat) : '';
         document.getElementById('big-cap').innerHTML = '<i>' + esc(sp) + '</i>' + ic + ' &mdash; ' + esc(lab) +
           (common ? '<div class=\"common\">' + esc(common) + '</div>' : '');
+        document.getElementById('big-credit').innerHTML = creditHTML(ds);
+        var n = cards().length;
+        document.getElementById('big-nav').innerHTML = n > 1 ? '&larr; &rarr; previous / next photo' : '';
         document.getElementById('big-side').style.display = 'flex';
         document.getElementById('tb-comments').style.display = COMMENTS_URL ? '' : 'none';
         if (window.profileHTML) {
@@ -219,8 +256,15 @@ ui <- fluidPage(
       function loadAllComments() {
         if (!COMMENTS_URL) return;
         fetch(COMMENTS_URL).then(function(r) { return r.json(); })
-          .then(function(j) { ALLC = (j && j.comments) || []; applyBadges(); }).catch(function() {});
+          .then(function(j) { ALLC = (j && j.comments) || []; applyBadges(); pushKeys(); }).catch(function() {});
       }
+      // photos with comments -> Shiny (filter 'Only photos with comments')
+      function pushKeys() {
+        if (!(window.Shiny && Shiny.setInputValue)) return;
+        var k = {}; ALLC.forEach(function(x) { k[x.species + '|' + x.photo] = 1; });
+        Shiny.setInputValue('commented', Object.keys(k).concat(['__loaded__']));
+      }
+      $(document).on('shiny:connected', function() { if (ALLC.length) pushKeys(); });
       function applyBadges() {
         var cnt = {};
         ALLC.forEach(function(x) { var k = x.species + '|' + x.photo; cnt[k] = (cnt[k] || 0) + 1; });
@@ -252,7 +296,14 @@ ui <- fluidPage(
           .catch(function() { bt.disabled = false; st.textContent = 'Could not send, please try again later.'; });
       }
       function hideBig() { document.getElementById('big').style.display = 'none'; }
-      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideBig(); });
+      document.addEventListener('keydown', function(e) {
+        if (document.getElementById('big').style.display !== 'block') return;
+        var t = (e.target && e.target.tagName) || '';
+        if (t === 'INPUT' || t === 'TEXTAREA') return;           // typing a comment
+        if (e.key === 'Escape') hideBig();
+        else if (e.key === 'ArrowRight') { e.preventDefault(); stepBig(1); }
+        else if (e.key === 'ArrowLeft')  { e.preventDefault(); stepBig(-1); }
+      });
       document.addEventListener('click', function(e) {
         var b = document.getElementById('big');
         if (b.style.display === 'block' && !b.contains(e.target) && e.target.tagName !== 'IMG') hideBig();
@@ -282,18 +333,24 @@ ui <- fluidPage(
         if (g >= 1000) return (g >= 100000 ? Math.round(g / 1000) : (g / 1000).toFixed(1)) + ' kg';
         return (g >= 10 ? Math.round(g) : g.toFixed(1)) + ' g';
       }
-      function score(x, p) {
-        if (isNA(x)) return NA_();
-        var top = Math.max(1, 100 - (+p));
-        return '<span class="bar"><span style="width:' + Math.round(+x * 100) + '%"></span></span> ' +
-               (+x).toFixed(2) + (isNA(p) ? '' : ' <span class="muted" title="Rank among all mammal species">&middot; top ' + top + '%</span>');
+      // Every bar = rank among all mammal species: bar length = share of species with a
+      // lower value (p, 0-100); "top x%" = share of species above. Full bar = highest.
+      function rankBar(p, txt, word) {
+        if (isNA(p)) return isNA(txt) ? NA_() : txt;
+        p = Math.min(100, Math.max(0, +p));
+        var top = Math.max(1, Math.round(100 - p));
+        return '<span class="bar" title="' + (word || 'Higher than') + ' ' + Math.round(p) + '% of mammal species"><span style="width:' +
+               Math.max(2, p) + '%"></span></span> ' + (isNA(txt) ? '' : txt + ' ') +
+               '<span class="muted" title="' + (word || 'Higher than') + ' ' + Math.round(p) + '% of mammal species">' +
+               (isNA(txt) ? '' : '&middot; ') + 'top ' + top + '%</span>';
       }
+      function score(x, p) { return isNA(x) ? NA_() : rankBar(p, (+x).toFixed(2)); }
       // Variable tooltips (hover over the label)
       var TIPS = {
-        'Academic': 'Scientific attention: composite index (0-1) built from the scientific literature, citations, research fields and genetic sequences (NCBI). Bar = index; top x% = rank among all mammal species.',
-        'Public': 'Public attention: composite index (0-1) built from Wikipedia page views, the number of common names and Flickr photos. Bar = index; top x% = rank among all mammal species.',
-        'iNaturalist': 'Number of research-grade iNaturalist observations (identification confirmed by the community), export of February 2025 (Jensen et al. 2026, J. Mammal.). Bar on a log scale relative to the most observed species; top x% = rank among all mammal species.',
-        'Range': 'Geographic range size (number of occupied grid cells). Bar on a log scale relative to the widest range; top x% = rank among all mammal species.',
+        'Academic': 'Scientific attention: composite index (0-1) built from the scientific literature, citations, research fields and genetic sequences (NCBI). Bar = rank among all mammal species (full = highest); top x% = share of species with a higher index.',
+        'Public': 'Public attention: composite index (0-1) built from Wikipedia page views, the number of common names and Flickr photos. Bar = rank among all mammal species (full = highest); top x% = share of species with a higher index.',
+        'iNaturalist': 'Number of research-grade iNaturalist observations (identification confirmed by the community), export of February 2025 (Jensen et al. 2026, J. Mammal.). Bar = rank among all mammal species (full = most observed); top x% = share of species with more observations.',
+        'Range': 'Geographic range size (number of occupied grid cells). Bar = rank among all mammal species (full = widest range); top x% = share of species with a wider range.',
         'Category': 'IUCN Red List category of the latest global assessment (year in brackets).',
         'Population trend': 'Population trend reported in the IUCN Red List assessment.',
         'Threats': 'Number of threats coded in the IUCN assessment, followed by the broad threat groups (IUCN Threats Classification, level 1).',
@@ -306,15 +363,12 @@ ui <- fluidPage(
         'Main source': 'Most frequent declared source of the CITES specimens.',
         'Main item': 'Most frequent type of item traded (live animals, skins, trophies, specimens...).',
         'Gu&eacute;nard et al. 2025': 'Conservation projects funding this species and total amount (US$), from Gu\u00e9nard et al. 2025.',
-        'Buxton et al. 2020': 'Conservation / recovery budget reported for this species in Buxton et al. 2020, summed over jurisdictions (US$).',
-        'InvaCost (invasion costs)': 'Reported economic costs of the species as an invader (InvaCost 4.1, 2017 US$). NA = no cost reported, not evidence of no impact.',
         'Pathogens': 'Host-pathogen associations in CLOVER 1.0. A pathogen is zoonotic when it is also recorded in humans. Counts depend on research effort.',
         'By type': 'Number of distinct pathogens by group (CLOVER 1.0).',
         'Visitor hazard': 'Hazard to zoo visitors (UK Standards of Modern Zoo Practice, 2025, Appendix B): 1A highest, 1 greater, 2 less, 3 least risk. Listed mostly by genus: a species inherits the category of its genus; unlisted taxa are category 3.',
         'Held in zoos (ZIMS)': 'Whether the species is recorded in zoos or aquariums of the ZIMS network (Species360), via DSKI (Conde et al. 2019).',
         'Demographic knowledge': 'Demographic Species Knowledge Index (Conde et al. 2019): how much is known on mortality and fertility (None / Low / Fair / High).',
-        'Description': 'Year the species was formally described (Mammal Diversity Database v2.5). Bar on a linear scale from the most recent description (empty) to 1758, Linnaeus (full); top x% = among the earliest described mammal species.',
-        'Described': 'Authority and year of the original description (MDD v2.5). Parentheses mean the species was first described in another genus.',
+        'Described': 'Authority and year of the original description (Mammal Diversity Database v2.5). Parentheses mean the species was first described in another genus. Bar = how early the species was described among all mammal species (full = among the first, 1758); top x% = share of species described earlier.',
         'Body mass': 'Adult body mass (COMBINE, otherwise EltonTraits).',
         'Max longevity': 'Maximum recorded age at death (COMBINE).',
         'Litter size': 'Mean number of young per litter (COMBINE).',
@@ -388,18 +442,10 @@ ui <- fluidPage(
         if (!r) return '<div class="com-meta">No data available for this species.</div>';
         var h = '<div class="pf-h">Attention, range &amp; discovery</div><table class="pf">' +
           row('Academic', score(r.acad, r.acad_pct)) + row('Public', score(r.public, r.public_pct)) +
-          row('Range', isNA(r.range_pct) ? NA_() : '<span class="bar" title="Range size (log scale, relative to the widest range)"><span style="width:' +
-              Math.max(2, +(isNA(r.range_bar) ? r.range_pct : r.range_bar)) + '%"></span></span> <span class="muted" title="Rank among all mammal species">top ' +
-              Math.max(1, 100 - (+r.range_pct)) + '%</span>') +
-          row('iNaturalist', isNA(r.inat_n_rg) ? NA_() : '<span class="bar"><span style="width:' +
-              Math.max(+r.inat_n_rg > 0 ? 2 : 0, +r.inat_bar) + '%"></span></span> ' + nf(r.inat_n_rg) + ' obs.' +
-              (isNA(r.inat_pct) ? '' : ' <span class="muted" title="Rank among all mammal species">&middot; top ' +
-              Math.max(1, 100 - (+r.inat_pct)) + '%</span>')) +
-          row('Description', isNA(r.desc_year) ? NA_() : '<span class="bar"><span style="width:' +
-              Math.max(2, +r.desc_bar) + '%"></span></span> ' + r.desc_year +
-              (isNA(r.desc_pct) ? '' : ' <span class="muted" title="Rank among all mammal species (earliest described first)">&middot; top ' +
-              Math.max(1, 100 - (+r.desc_pct)) + '%</span>')) +
-          row('Described', isNA(r.desc_author) ? NA_() : r.desc_author) + '</table>';
+          row('Range', isNA(r.range_pct) ? NA_() : rankBar(r.range_pct, null)) +
+          row('iNaturalist', isNA(r.inat_n_rg) ? NA_() : rankBar(r.inat_pct, nf(r.inat_n_rg) + ' obs.')) +
+          row('Described', isNA(r.desc_year) ? NA_() :
+              rankBar(r.desc_pct, esc(isNA(r.desc_author) ? String(r.desc_year) : r.desc_author), 'Described earlier than')) + '</table>';
         h += '<div class="pf-h">IUCN Red List</div><table class="pf">' +
           row('Category', isNA(r.iucn_cat) ? NA_() : iucnBadge(r.iucn_cat) + ' ' + esc(IUCN_NAMES[r.iucn_cat] || '') +
               (isNA(r.iucn_year) ? '' : ' <span class="muted">(' + r.iucn_year + ')</span>')) +
@@ -413,9 +459,7 @@ ui <- fluidPage(
         h += '<div class="pf-h">Conservation funding</div><table class="pf">' +
           row('Gu&eacute;nard et al. 2025', isNA(r.guenard_projects) ? NA_() :
               r.guenard_projects + ' project' + (+r.guenard_projects > 1 ? 's' : '') +
-              (isNA(r.guenard_usd) ? '' : ' &middot; US$ ' + money(r.guenard_usd))) +
-          row('Buxton et al. 2020', isNA(r.buxton_budget) ? NA_() : 'US$ ' + money(r.buxton_budget)) +
-          row('InvaCost (invasion costs)', isNA(r.invacost_usd) ? NA_() : 'US$ ' + money(r.invacost_usd)) + '</table>';
+              (isNA(r.guenard_usd) ? '' : ' &middot; US$ ' + money(r.guenard_usd))) + '</table>';
         h += '<div class="pf-h">Zoonoses (CLOVER 1.0)</div><table class="pf">' + zooRows(r) + '</table>';
         h += '<div class="pf-h">Zoos (ZIMS / DSKI)</div><table class="pf">' +
           row('Visitor hazard', hazardHTML(r)) +
@@ -449,9 +493,10 @@ ui <- fluidPage(
       }
   )---")),
   div(id = "big",
-      span(class = "close", title = "Close", onclick = "hideBig()", HTML("&times;")),
+      span(class = "close", title = "Close (Esc)", onclick = "hideBig()", HTML("&times;")),
+      span(id = "big-nav", class = "nav"),
       div(class = "big-wrap",
-        div(tags$img(id = "big-img", src = ""), div(id = "big-cap", class = "cap")),
+        div(tags$img(id = "big-img", src = ""), div(id = "big-credit", class = "credit"), div(id = "big-cap", class = "cap")),
         div(id = "big-side", class = "big-side",
           div(class = "tabs",
             tags$button(id = "tb-profile", type = "button", class = "tab on", onclick = "showTab('profile')", "Profile"),
@@ -467,27 +512,21 @@ ui <- fluidPage(
             tags$span(id = "com-status")))))),
 
   h2(class = "app-title", "CHARISMAM — image viewer"),
-  div(class = "sub", sprintf(if (comments_url != "") "%d species, %d families, %d orders, %d photos — click a photo to enlarge it and leave a comment" else "%d species, %d families, %d orders, %d photos — click a photo to enlarge it",
-                             nrow(sp_tab), nrow(fam_tab), nrow(ord_tab), nrow(img))),
-  sidebarLayout(
-    sidebarPanel(width = 3,
-      selectizeInput("order",   "Order",   choices = ord_choices()),
-      selectizeInput("family",  "Family", choices = fam_choices(ALL)),
-      selectizeInput("species", "Species",  choices = sp_choices(),
-                     options = list(placeholder = "Latin or common name...")),
-      radioButtons("mode", "Show",
-                   choices = c("Selected species" = "species",
-                               "Whole family"     = "family",
-                               "Whole order"      = "order")),
-      uiOutput("sp_list")
-    ),
-    mainPanel(width = 9, uiOutput("gallery"))
-  )
+  div(class = "filters",
+    div(class = "f-sel", selectizeInput("order",  "Order",  choices = ord_choices())),
+    div(class = "f-sel", selectizeInput("family", "Family", choices = fam_choices(ALL))),
+    div(class = "f-sp",  selectizeInput("species", "Species", choices = sp_choices(),
+                                        options = list(placeholder = "Latin or common name..."))),
+    div(class = "f-sort", selectInput("sort", "Sort species by",
+                                      choices = c("Name" = "alpha", "Public attention" = "public", "Research attention" = "acad"))),
+    if (comments_url != "") div(class = "f-chk", checkboxInput("only_com", "Only photos with comments", FALSE))),
+  div(class = "sub", sprintf(if (comments_url != "") "%s species, %d families, %d orders, %s photos \u2014 click a photo to enlarge it and leave a comment" else "%s species, %d families, %d orders, %s photos \u2014 click a photo to enlarge it",
+                             format(nrow(sp_tab), big.mark = ","), nrow(fam_tab), nrow(ord_tab), format(nrow(img), big.mark = ","))),
+  uiOutput("gallery")
 )
 
 server <- function(input, output, session) {
 
-  set_mode <- function(m) if (!identical(input$mode, m)) updateRadioButtons(session, "mode", selected = m)
   set_sel <- function(id, choices, selected) {
     updateSelectizeInput(session, id, choices = choices, selected = selected)
   }
@@ -500,8 +539,6 @@ server <- function(input, output, session) {
     sp  <- if (sp_ok) input$species else ALL
     set_sel("family", fam_choices(input$order), fam)
     if (!identical(sp, input$species)) updateSelectizeInput(session, "species", selected = sp)
-    # automatic display: order chosen alone -> whole order
-    if (sp == ALL && fam == ALL) set_mode(if (input$order != ALL) "order" else "species")
   }, ignoreInit = TRUE)
 
   # Family -> sets the order, restricts species
@@ -515,50 +552,53 @@ server <- function(input, output, session) {
              (input$family == ALL || identical(sp_tab$family[sp_tab$species == input$species][1], input$family))
     sp <- if (sp_ok) input$species else ALL
     if (!identical(sp, input$species)) updateSelectizeInput(session, "species", selected = sp)
-    # automatic display: family chosen (no species) -> whole family;
-    # family reset to "all" with an order chosen -> whole order
-    if (sp == ALL) {
-      if (input$family != ALL) set_mode("family") else if (ord != ALL) set_mode("order")
-    }
   }, ignoreInit = TRUE)
 
   # Species -> sets family and order
   observeEvent(input$species, {
     if (input$species == ALL) return()
-    set_mode("species")                                   # species chosen -> show it
     r <- sp_tab[sp_tab$species == input$species, ][1, ]
     if (!identical(r$order, input$order))   updateSelectizeInput(session, "order", selected = r$order)
     if (!identical(r$family, input$family)) set_sel("family", fam_choices(r$order), r$family)
   })
 
-  # Click on a name in the list -> show the species
-  observeEvent(input$go_sp, {
-    r <- sp_tab[sp_tab$species == input$go_sp, ][1, ]
-    updateSelectizeInput(session, "order", selected = r$order)
-    set_sel("family",  fam_choices(r$order), r$family)
-    updateSelectizeInput(session, "species", selected = r$species)
-    updateRadioButtons(session, "mode", selected = "species")
+  # What is shown follows the menus: species > family > order
+  mode <- reactive({
+    if (!is.null(input$species) && input$species != ALL) "species"
+    else if (!is.null(input$family) && input$family != ALL) "family"
+    else if (!is.null(input$order) && input$order != ALL) "order"
+    else "none"
   })
 
-  # Clickable list of the species of the family
-  output$sp_list <- renderUI({
-    if (input$family == ALL) return(NULL)
-    sp <- sp_tab$species[sp_tab$family == input$family]
-    tagList(tags$label(sprintf("Species in this family (%d)", length(sp))),
-            div(class = "sp-list", lapply(sp, function(s)
-              tags$a(href = "#", class = if (identical(s, input$species)) "current" else NULL,
-                     onclick = sprintf("Shiny.setInputValue('go_sp', '%s', {priority: 'event'}); return false;", s),
-                     tags$em(s),
-                     { en <- sp_tab$name_en[sp_tab$species == s][1]; if (nzchar(en)) tags$span(class = "common", en) }))))
-  })
+  # Photos with comments (keys "species|photo label", sent by the browser)
+  only_com <- reactive(isTRUE(input$only_com))
+  com_keys <- reactive(input$commented)
+  keep_com <- function(d) if (!only_com()) d else d[paste(d$species, d$lab, sep = "|") %in% com_keys(), , drop = FALSE]
+
+  # Species order (sort menu); within a species: all then head, photo 1 then 2
+  sort_rows <- function(d) {
+    k <- switch(input$sort %||% "alpha",
+                public = -att_of(d$species, "public"), acad = -att_of(d$species, "acad"), rep(0, nrow(d)))
+    d[order(k, d$species, d$n, d$type, na.last = TRUE), , drop = FALSE]
+  }
+  empty_com <- function() div(class = "hint", if (is.null(com_keys())) "Loading comments..." else "No commented photo here yet.")
 
   output$gallery <- renderUI({
-    switch(input$mode,
+    switch(mode(),
+
+      none = {
+        if (!only_com())
+          return(div(class = "hint", "Pick an order, a family or a species (search by Latin or common name)."))
+        d <- keep_com(img)
+        if (!nrow(d)) return(empty_com())
+        tagList(div(class = "head", h3("Photos with comments"),
+                    span(class = "tax", sprintf("%d species, %d photos", length(unique(d$species)), nrow(d)))),
+                gallery(sort_rows(d)))
+      },
 
       species = {
-        if (input$species == ALL)
-          return(div(class = "hint", "Search a species by name, or pick an order / a family and then a species."))
-        d <- img[img$species == input$species, ]
+        d <- keep_com(img[img$species == input$species, ])
+        if (!nrow(d)) return(empty_com())
         d <- d[order(d$n, d$type), ]                 # all then head, photo 1 then 2
         cm <- d$common[1]
         tagList(div(class = "head", h3(tags$em(input$species), iucn_badge(iucn_of(input$species))), if (nzchar(cm)) div(class = "common", cm),
@@ -567,24 +607,25 @@ server <- function(input, output, session) {
       },
 
       family = {
-        if (input$family == ALL)
-          return(div(class = "hint", "Pick a family to see all its photos."))
-        d  <- img[img$family == input$family, ]
+        d <- keep_com(img[img$family == input$family, ])
+        if (!nrow(d)) return(empty_com())
         tagList(div(class = "head", h3(input$family),
                     span(class = "tax", sprintf("%s — %d species, %d photos", d$order[1],
                                                 length(unique(d$species)), nrow(d)))),
-                gallery(d))
+                gallery(sort_rows(d)))
       },
 
       order = {
-        if (input$order == ALL)
-          return(div(class = "hint", "Pick an order to see all its photos."))
-        d <- img[img$order == input$order, ]
+        d <- keep_com(img[img$order == input$order, ])
+        if (!nrow(d)) return(empty_com())
         tagList(div(class = "head", h3(input$order),
                     span(class = "tax", sprintf("%d families, %d species, %d photos",
                                                 length(unique(d$family)), length(unique(d$species)), nrow(d)))),
-                lapply(sort(unique(d$family)), function(f)
-                  tagList(div(class = "grp", f), gallery(d[d$family == f, ]))))
+                # sorted by name: grouped by family; sorted by attention: one ranking for the whole order
+                if ((input$sort %||% "alpha") == "alpha")
+                  lapply(sort(unique(d$family)), function(f)
+                    tagList(div(class = "grp", f), gallery(sort_rows(d[d$family == f, ]))))
+                else gallery(sort_rows(d)))
       })
   })
 }
