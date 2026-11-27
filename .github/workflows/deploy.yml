@@ -1,5 +1,5 @@
-# Publie la visionneuse sur GitHub Pages avec Shinylive, à chaque push sur main.
-# Fichier écrit par scripts/deploy_viewer.R (projet CHARISMAM).
+# Publishes the viewer on GitHub Pages with Shinylive, at each push on main.
+# File written by scripts/deploy_viewer.R (CHARISMAM project).
 name: Deploy viewer
 
 on:

@@ -1,53 +1,53 @@
 # =============================================================================
-# CHARISMAM — visionneuse d'images de mammifères (Shiny / Shinylive)
+# CHARISMAM — mammal image viewer (Shiny / Shinylive)
 # -----------------------------------------------------------------------------
-# En ligne :  https://nmouquet.github.io/charismam-viewer/ (GitHub Pages)
-# En local :  shiny::runApp("app/viewer")
+# Online:  https://nmouquet.github.io/charismam-viewer/ (GitHub Pages)
+# Locally: shiny::runApp("app/viewer")
 #
-# CE QUE FAIT L'APP
-#   - parcourir les photos (all / head) par ordre, famille ou espèce ; la recherche
-#     d'espèce couvre toujours toutes les espèces (nom latin ou nom commun) ;
-#     l'affichage (espèce / famille / ordre) suit automatiquement les menus
-#   - clic sur une photo : cadre agrandi avec deux onglets
-#       Profile   fiche de l'espèce (attention & aire de répartition, UICN, CITES,
-#                 financements, zoonoses, zoos et danger pour les visiteurs, traits),
-#                 avec une infobulle sur chaque variable
-#       Comments  commentaires des visiteurs sur la photo et sur l'espèce
-#   - pastille UICN à côté du nom, pastille du nombre de commentaires sur les vignettes
+# WHAT THE APP DOES
+#   - browse the photos (all / head) by order, family or species; the species
+#     search always covers all species (Latin or common name); the display
+#     (species / family / order) follows the menus automatically
+#   - click on a photo: enlarged frame with two tabs
+#       Profile   species sheet (attention & range, IUCN, CITES, funding,
+#                 zoonoses, zoos and hazard to visitors, traits), with a
+#                 tooltip on each variable
+#       Comments  visitors' comments on the photo and on the species
+#   - IUCN badge next to the name, badge with the number of comments on thumbnails
 #
-# FICHIERS LUS (tous écrits par scripts/deploy_viewer.R — ne pas modifier à la main)
-#   images.csv         une ligne par photo en ligne (fichier, espèce, taxonomie,
-#                      noms communs anglais / français)
-#   species_info.csv   fiche de chaque espèce (sources détaillées dans deploy_viewer.R)
-#   comments_url.txt   adresse de l'Apps Script Google des commentaires (optionnel)
-# Les photos sont lues directement sur Scaleway (bucket public biodiful-bucket,
-# dossier charismam/pool/). Les commentaires sont lus et écrits par le navigateur
-# dans un Google Sheet (scripts/comments_apps_script.gs).
+# FILES READ (all written by scripts/deploy_viewer.R — do not edit by hand)
+#   images.csv         one row per photo online (file, species, taxonomy,
+#                      English / French common names)
+#   species_info.csv   profile of each species (sources detailed in deploy_viewer.R)
+#   comments_url.txt   address of the Google Apps Script for comments (optional)
+# Photos are read directly from Scaleway (public bucket biodiful-bucket, folder
+# charismam/pool/). Comments are read and written by the browser in a Google
+# Sheet (scripts/comments_apps_script.gs).
 #
-# Interface en anglais (visionneuse partagée avec des collaborateurs).
+# Interface in English (viewer shared with collaborators).
 # =============================================================================
 
 library(shiny)
 
 base_url <- "https://biodiful-bucket.s3.fr-par.scw.cloud/charismam/pool/"
 
-# Commentaires : URL de l'Apps Script Google (fichier écrit par deploy_viewer.R).
-# Sans ce fichier, la partie commentaires n'apparaît pas.
+# Comments: URL of the Google Apps Script (file written by deploy_viewer.R).
+# Without this file, the comments part does not appear.
 comments_url <- if (file.exists("comments_url.txt")) trimws(readLines("comments_url.txt", warn = FALSE)[1]) else ""
 if (is.na(comments_url)) comments_url <- ""
 
 img <- read.csv("images.csv", stringsAsFactors = FALSE, encoding = "UTF-8", na.strings = character())
 for (v in c("name_en", "name_fr")) if (!v %in% names(img)) img[[v]] <- ""
-# nom commun affiché : "Moose · Élan" (vide si aucun nom connu)
+# common name shown: "Moose · Élan" (empty if no known name)
 img$common <- mapply(function(a, b) {
   v <- c(a, b)[nzchar(c(a, b))]; v <- v[!duplicated(tolower(v))]   # "Jaguar · Jaguar" -> "Jaguar"
   paste(v, collapse = " \u00b7 ")
 }, img$name_en, img$name_fr)
 img$url <- paste0(base_url, img$file)
-multi   <- ave(img$n, img$species, img$type, FUN = max) > 1   # plusieurs photos du même type
+multi   <- ave(img$n, img$species, img$type, FUN = max) > 1   # several photos of the same type
 img$lab <- ifelse(multi, paste(img$type, img$n), img$type)
 
-# Fiche espèce (onglet "Profile" du cadre), écrite par deploy_viewer.R
+# Species profile ("Profile" tab of the frame), written by deploy_viewer.R
 info <- if (file.exists("species_info.csv"))
   read.csv("species_info.csv", stringsAsFactors = FALSE, encoding = "UTF-8", na.strings = "") else NULL
 info_json <- if (is.null(info)) "[]" else jsonlite::toJSON(info, dataframe = "rows", na = "null", digits = NA)
@@ -64,7 +64,7 @@ fam_tab <- fam_tab[order(fam_tab$family), ]
 ord_tab <- aggregate(species ~ order, data = sp_tab, FUN = length)
 ord_tab <- ord_tab[order(ord_tab$order), ]
 
-ALL <- ""   # valeur "tous / toutes" dans les menus
+ALL <- ""   # "all" value in the menus
 
 ord_choices <- function() c("All orders" = ALL,
   setNames(ord_tab$order, sprintf("%s (%d)", ord_tab$order, ord_tab$species)))
@@ -72,14 +72,14 @@ fam_choices <- function(ord) {
   f <- if (ord == ALL) fam_tab else fam_tab[fam_tab$order == ord, ]
   c("All families" = ALL, setNames(f$family, sprintf("%s (%d)", f$family, f$species)))
 }
-# Le menu Espèce propose toujours TOUTES les espèces (recherche globale)
+# The Species menu always offers ALL species (global search)
 sp_choices <- function() {
   s <- sp_tab
   c("Latin or common name..." = ALL,
     setNames(s$species, ifelse(nzchar(s$common), paste0(s$species, " \u2014 ", s$common), s$species)))
 }
 
-# Vignette : image (clic = cadre agrandi + commentaires) + légende (espèce en italique, type de photo)
+# Thumbnail: image (click = enlarged frame + comments) + caption (species in italics, photo type)
 card <- function(r) {
   tags$figure(class = "card",
     tags$img(src = r$url, loading = "lazy", alt = r$species, title = "Enlarge / comment",
@@ -200,7 +200,7 @@ ui <- fluidPage(
         fetch(COMMENTS_URL + '?species=' + encodeURIComponent(sp))
           .then(function(r) { return r.json(); })
           .then(function(j) {
-            if (CUR.sp !== sp) return;                       // une autre photo a été ouverte entre-temps
+            if (CUR.sp !== sp) return;                       // another photo was opened in the meantime
             var c = (j && j.comments) || [];
             document.getElementById('tb-comments').textContent = 'Comments (' + c.length + ')';
             var mine = c.filter(function(x) { return x.photo === lab; }),
@@ -214,7 +214,7 @@ ui <- fluidPage(
           })
           .catch(function() { box.innerHTML = '<span class=\"com-meta\">Comments are unavailable at the moment.</span>'; });
       }
-      // Pastilles \"nombre de commentaires\" sur les vignettes
+      // \"Number of comments\" badges on the thumbnails
       var ALLC = [];
       function loadAllComments() {
         if (!COMMENTS_URL) return;
@@ -288,7 +288,7 @@ ui <- fluidPage(
         return '<span class="bar"><span style="width:' + Math.round(+x * 100) + '%"></span></span> ' +
                (+x).toFixed(2) + (isNA(p) ? '' : ' <span class="muted" title="Rank among all mammal species">&middot; top ' + top + '%</span>');
       }
-      // Infobulles des variables (survol du libellé)
+      // Variable tooltips (hover over the label)
       var TIPS = {
         'Academic': 'Scientific attention: composite index (0-1) built from the scientific literature, citations, research fields and genetic sequences (NCBI). Bar = index; top x% = rank among all mammal species.',
         'Public': 'Public attention: composite index (0-1) built from Wikipedia page views, the number of common names and Flickr photos. Bar = index; top x% = rank among all mammal species.',
@@ -480,7 +480,7 @@ server <- function(input, output, session) {
     updateSelectizeInput(session, id, choices = choices, selected = selected)
   }
 
-  # Ordre -> restreint familles et espèces
+  # Order -> restricts families and species
   observeEvent(input$order, {
     fam <- if (input$family %in% fam_choices(input$order)) input$family else ALL
     sp_ok <- input$species != ALL &&
@@ -488,11 +488,11 @@ server <- function(input, output, session) {
     sp  <- if (sp_ok) input$species else ALL
     set_sel("family", fam_choices(input$order), fam)
     if (!identical(sp, input$species)) updateSelectizeInput(session, "species", selected = sp)
-    # affichage automatique : ordre choisi seul -> tout l'ordre
+    # automatic display: order chosen alone -> whole order
     if (sp == ALL && fam == ALL) set_mode(if (input$order != ALL) "order" else "species")
   }, ignoreInit = TRUE)
 
-  # Famille -> cale l'ordre, restreint les espèces
+  # Family -> sets the order, restricts species
   observeEvent(input$family, {
     ord <- if (input$family == ALL) input$order else fam_tab$order[fam_tab$family == input$family][1]
     if (!identical(ord, input$order)) {
@@ -503,23 +503,23 @@ server <- function(input, output, session) {
              (input$family == ALL || identical(sp_tab$family[sp_tab$species == input$species][1], input$family))
     sp <- if (sp_ok) input$species else ALL
     if (!identical(sp, input$species)) updateSelectizeInput(session, "species", selected = sp)
-    # affichage automatique : famille choisie (sans espèce) -> toute la famille ;
-    # famille remise à "toutes" avec un ordre choisi -> tout l'ordre
+    # automatic display: family chosen (no species) -> whole family;
+    # family reset to "all" with an order chosen -> whole order
     if (sp == ALL) {
       if (input$family != ALL) set_mode("family") else if (ord != ALL) set_mode("order")
     }
   }, ignoreInit = TRUE)
 
-  # Espèce -> cale famille et ordre
+  # Species -> sets family and order
   observeEvent(input$species, {
     if (input$species == ALL) return()
-    set_mode("species")                                   # espèce choisie -> on l'affiche
+    set_mode("species")                                   # species chosen -> show it
     r <- sp_tab[sp_tab$species == input$species, ][1, ]
     if (!identical(r$order, input$order))   updateSelectizeInput(session, "order", selected = r$order)
     if (!identical(r$family, input$family)) set_sel("family", fam_choices(r$order), r$family)
   })
 
-  # Clic sur un nom dans la liste -> affiche l'espèce
+  # Click on a name in the list -> show the species
   observeEvent(input$go_sp, {
     r <- sp_tab[sp_tab$species == input$go_sp, ][1, ]
     updateSelectizeInput(session, "order", selected = r$order)
@@ -528,7 +528,7 @@ server <- function(input, output, session) {
     updateRadioButtons(session, "mode", selected = "species")
   })
 
-  # Liste cliquable des espèces de la famille
+  # Clickable list of the species of the family
   output$sp_list <- renderUI({
     if (input$family == ALL) return(NULL)
     sp <- sp_tab$species[sp_tab$family == input$family]
@@ -547,7 +547,7 @@ server <- function(input, output, session) {
         if (input$species == ALL)
           return(div(class = "hint", "Search a species by name, or pick an order / a family and then a species."))
         d <- img[img$species == input$species, ]
-        d <- d[order(d$n, d$type), ]                 # all puis head, photo 1 puis 2
+        d <- d[order(d$n, d$type), ]                 # all then head, photo 1 then 2
         cm <- d$common[1]
         tagList(div(class = "head", h3(tags$em(input$species), iucn_badge(iucn_of(input$species))), if (nzchar(cm)) div(class = "common", cm),
                     span(class = "tax", sprintf("%s — %s", d$family[1], d$order[1]))),
