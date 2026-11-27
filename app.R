@@ -1,11 +1,30 @@
 # =============================================================================
-# CHARISMAM — visionneuse d'images de mammifères
+# CHARISMAM — visionneuse d'images de mammifères (Shiny / Shinylive)
 # -----------------------------------------------------------------------------
-# Les images sont lues directement sur Scaleway (bucket public).
-# La liste des images vient de images.csv (créé par scripts/deploy_viewer.R).
-#
+# En ligne :  https://nmouquet.github.io/charismam-viewer/ (GitHub Pages)
 # En local :  shiny::runApp("app/viewer")
-# En ligne :  https://nmouquet.github.io/charismam-viewer/ (Shinylive, GitHub Pages)
+#
+# CE QUE FAIT L'APP
+#   - parcourir les photos (all / head) par ordre, famille ou espèce ; la recherche
+#     d'espèce couvre toujours toutes les espèces (nom latin ou nom commun) ;
+#     l'affichage (espèce / famille / ordre) suit automatiquement les menus
+#   - clic sur une photo : cadre agrandi avec deux onglets
+#       Profile   fiche de l'espèce (attention & aire de répartition, UICN, CITES,
+#                 financements, zoonoses, zoos et danger pour les visiteurs, traits),
+#                 avec une infobulle sur chaque variable
+#       Comments  commentaires des visiteurs sur la photo et sur l'espèce
+#   - pastille UICN à côté du nom, pastille du nombre de commentaires sur les vignettes
+#
+# FICHIERS LUS (tous écrits par scripts/deploy_viewer.R — ne pas modifier à la main)
+#   images.csv         une ligne par photo en ligne (fichier, espèce, taxonomie,
+#                      noms communs anglais / français)
+#   species_info.csv   fiche de chaque espèce (sources détaillées dans deploy_viewer.R)
+#   comments_url.txt   adresse de l'Apps Script Google des commentaires (optionnel)
+# Les photos sont lues directement sur Scaleway (bucket public biodiful-bucket,
+# dossier charismam/pool/). Les commentaires sont lus et écrits par le navigateur
+# dans un Google Sheet (scripts/comments_apps_script.gs).
+#
+# Interface en anglais (visionneuse partagée avec des collaborateurs).
 # =============================================================================
 
 library(shiny)
@@ -137,7 +156,6 @@ ui <- fluidPage(
       .badge-com { position: absolute; top: 6px; right: 6px; background: rgba(255,255,255,.92); border-radius: 10px;
                    padding: 1px 7px; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.25); pointer-events: none; }
       .com-h { font-size: 12.5px; font-weight: 600; color: #555; margin: 4px 0 4px; }
-      .com-item.this { border-color: #9ec1e6; background: #f1f7fd; }
       .com-meta { color: #888; font-size: 12px; margin-bottom: 2px; }
       .com-text { white-space: pre-wrap; }
       .com-form { border-top: 1px solid #e6e6e6; padding-top: 8px; margin-top: 6px; }
