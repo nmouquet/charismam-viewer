@@ -292,6 +292,7 @@ ui <- fluidPage(
       var TIPS = {
         'Academic': 'Scientific attention: composite index (0-1) built from the scientific literature, citations, research fields and genetic sequences (NCBI). Bar = index; top x% = rank among all mammal species.',
         'Public': 'Public attention: composite index (0-1) built from Wikipedia page views, the number of common names and Flickr photos. Bar = index; top x% = rank among all mammal species.',
+        'iNaturalist': 'Number of research-grade iNaturalist observations (identification confirmed by the community), export of February 2025 (Jensen et al. 2026, J. Mammal.). Bar on a log scale relative to the most observed species; top x% = rank among all mammal species.',
         'Range': 'Geographic range size (number of occupied grid cells). Bar on a log scale relative to the widest range; top x% = rank among all mammal species.',
         'Category': 'IUCN Red List category of the latest global assessment (year in brackets).',
         'Population trend': 'Population trend reported in the IUCN Red List assessment.',
@@ -387,7 +388,11 @@ ui <- fluidPage(
           row('Academic', score(r.acad, r.acad_pct)) + row('Public', score(r.public, r.public_pct)) +
           row('Range', isNA(r.range_pct) ? NA_() : '<span class="bar" title="Range size (log scale, relative to the widest range)"><span style="width:' +
               Math.max(2, +(isNA(r.range_bar) ? r.range_pct : r.range_bar)) + '%"></span></span> <span class="muted" title="Rank among all mammal species">top ' +
-              Math.max(1, 100 - (+r.range_pct)) + '%</span>') + '</table>';
+              Math.max(1, 100 - (+r.range_pct)) + '%</span>') +
+          row('iNaturalist', isNA(r.inat_n_rg) ? NA_() : '<span class="bar"><span style="width:' +
+              Math.max(+r.inat_n_rg > 0 ? 2 : 0, +r.inat_bar) + '%"></span></span> ' + nf(r.inat_n_rg) + ' obs.' +
+              (isNA(r.inat_pct) ? '' : ' <span class="muted" title="Rank among all mammal species">&middot; top ' +
+              Math.max(1, 100 - (+r.inat_pct)) + '%</span>')) + '</table>';
         h += '<div class="pf-h">IUCN Red List</div><table class="pf">' +
           row('Category', isNA(r.iucn_cat) ? NA_() : iucnBadge(r.iucn_cat) + ' ' + esc(IUCN_NAMES[r.iucn_cat] || '') +
               (isNA(r.iucn_year) ? '' : ' <span class="muted">(' + r.iucn_year + ')</span>')) +
