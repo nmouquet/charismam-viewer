@@ -95,7 +95,7 @@ card <- function(r) {
     tags$img(src = r$url, loading = "lazy", alt = r$species, title = "Enlarge / comment",
              `data-sp` = r$species, `data-lab` = r$lab, `data-common` = r$common,
              `data-author` = r$author, `data-lic` = r$license, `data-src` = r$source_url,
-             onclick = "showBigEl(this)"),
+             onclick = "showBigEl(this)", onload = "this.classList.add('ok')"),
     tags$figcaption(div(class = "l1", tags$em(r$species), tags$span(class = "type", r$lab)),
                     if (nzchar(r$common)) div(class = "common", r$common)))
 }
@@ -112,7 +112,21 @@ ui <- fluidPage(
       .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
       .gallery.big { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
       .card { position: relative; margin: 0; background: #fff; border: 1px solid #e3e3e3; border-radius: 6px; overflow: hidden; }
-      .card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #eee; cursor: zoom-in; }
+      .card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; cursor: zoom-in;
+                  background: linear-gradient(90deg, #ececec 25%, #f7f7f7 50%, #ececec 75%); background-size: 200% 100%;
+                  animation: shimmer 1.4s linear infinite; }       /* grey shimmer until the photo is loaded */
+      .card img.ok { animation: none; background: #eee; }
+      @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      /* waiting indicator while the server builds a page of photos (Shiny adds .shiny-busy to <html>) */
+      .busy-ind { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%); z-index: 9000;
+                  display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,.95); padding: 14px 22px;
+                  border-radius: 8px; box-shadow: 0 2px 14px rgba(0,0,0,.2); font-size: 15px; color: #444;
+                  opacity: 0; visibility: hidden; transition: opacity .2s, visibility .2s; pointer-events: none; }
+      html.shiny-busy .busy-ind { opacity: 1; visibility: visible; transition-delay: .3s; }
+      .busy-ind .spin { width: 22px; height: 22px; border: 3px solid #d6e4f2; border-top-color: #4a8cc9; border-radius: 50%;
+                        animation: spin .8s linear infinite; }
+      #gallery.recalculating { opacity: .4; transition: opacity .2s; }
       .card figcaption { padding: 6px 10px; font-size: 14px; }
       .card figcaption .l1 { display: flex; justify-content: space-between; gap: 8px; }
       .common { color: #666; font-size: 12.5px; }
@@ -131,7 +145,15 @@ ui <- fluidPage(
       .sub { color: #777; margin: 2px 0 16px; }
       #big .credit { font-size: 12px; color: #888; text-align: center; margin-top: 3px; }
       #big .credit a { color: #888; text-decoration: underline; }
-      #big .nav { position: absolute; top: 4px; left: 14px; color: #999; font-size: 12px; }
+      #big .nav { position: absolute; top: 6px; left: 14px; color: #999; font-size: 12px; }
+      .imgwrap { position: relative; }
+      .navbtn { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border: none;
+                border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 1px 6px rgba(0,0,0,.35);
+                font-size: 30px; line-height: 44px; color: #333; cursor: pointer; padding: 0; z-index: 2; }
+      .navbtn:hover { background: #fff; }
+      .navbtn.prev { left: 10px; } .navbtn.next { right: 10px; }
+      #big .credit .tbd { color: #c77700; }
+      #big .credit .nolic { color: #b00020; }
       .hint { color: #888; margin-top: 40px; text-align: center; font-size: 16px; }
       #big { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
              z-index: 9999; background: #fff; border: 1px solid #ccc; border-radius: 8px;
@@ -141,7 +163,7 @@ ui <- fluidPage(
       .big-wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
       #big img { display: block; width: min(680px, 92vw, 80vh); height: auto; }
       #big .cap { margin-top: 6px; font-size: 15px; text-align: center; }
-      .big-side { width: 380px; max-width: 92vw; display: flex; flex-direction: column; max-height: min(700px, 82vh); }
+      .big-side { width: 470px; max-width: 92vw; display: flex; flex-direction: column; max-height: min(700px, 82vh); }
       .big-side h5 { margin: 0 0 8px; font-weight: 600; }
       #com-list { overflow-y: auto; flex: 1; min-height: 60px; }
       .com-item { background: #f7f7f7; border: 1px solid #e6e6e6; border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; font-size: 14px; }
@@ -162,12 +184,14 @@ ui <- fluidPage(
       .pf-h { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .4px; margin: 10px 0 3px; }
       .pf-h:first-child { margin-top: 2px; }
       table.pf { width: 100%; font-size: 13.5px; border-collapse: collapse; }
-      table.pf th { font-weight: 400; color: #777; width: 34%; vertical-align: top; padding: 2px 6px 2px 0; }
+      table.pf th { font-weight: 400; color: #777; width: 150px; vertical-align: top; padding: 2px 6px 2px 0; }
       table.pf td { padding: 2px 0; vertical-align: top; }
       .na { color: #aaa; }
       .tip { border-bottom: 1px dotted #aaa; cursor: help; }
       .muted { color: #888; font-size: 12px; }
       .bar { display: inline-block; width: 60px; height: 7px; background: #e6e6e6; border-radius: 4px; vertical-align: middle; }
+      .rk { white-space: nowrap; }
+      .pf-note { font-size: 12px; color: #888; line-height: 1.35; margin: 0 0 5px; }
       .bar span { display: block; height: 100%; background: #4a8cc9; border-radius: 4px; }
       .badge-com { position: absolute; top: 6px; right: 6px; background: rgba(255,255,255,.92); border-radius: 10px;
                    padding: 1px 7px; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.25); pointer-events: none; }
@@ -179,8 +203,9 @@ ui <- fluidPage(
       .com-form textarea { min-height: 70px; }
       #com-status { margin-left: 8px; color: #888; font-size: 13px; }
     ")),
-    tags$script(HTML(sprintf("
-      var COMMENTS_URL = '%s', CUR = { sp: '', lab: '' };
+    tags$script(HTML(sprintf("var COMMENTS_URL = '%s';", comments_url))),
+    tags$script(HTML("
+      var CUR = { sp: '', lab: '' };
       function esc(x) { var d = document.createElement('div'); d.textContent = x == null ? '' : String(x); return d.innerHTML; }
       var CUR_EL = null;
       function showBigEl(el) { CUR_EL = el; showBig(el.src, el.dataset.sp, el.dataset.lab, el.dataset.common, el.dataset); }
@@ -189,15 +214,17 @@ ui <- fluidPage(
       function stepBig(d) {
         var c = cards(), i = c.indexOf(CUR_EL);
         if (i < 0 || !c.length) return;
-        showBigEl(c[(i + d + c.length) %% c.length]);
+        showBigEl(c[(i + d + c.length) % c.length]);
       }
+      // Photo credit. license: a licence name, 'NO' = no free licence (not reusable as such),
+      // '' = not looked up yet; author: a name, 'unknown', or '' = not looked up yet
       function creditHTML(ds) {
         if (!ds) return '';
         var a = ds.author || '', l = ds.lic || '', u = ds.src || '';
-        if (!a && !l && !u) return '';
+        var tbd = function(w) { return '<span class=\"tbd\">' + w + ': to be filled</span>'; };
         var parts = [];
-        if (a) parts.push((l && l !== 'Public domain' ? '' : '&copy; ') + esc(a));
-        if (l) parts.push(esc(l));
+        parts.push(a === 'unknown' ? 'author unknown' : a ? (l === 'NO' ? '&copy; ' : '') + esc(a) : tbd('author'));
+        parts.push(l === 'NO' ? '<span class=\"nolic\">no free licence</span>' : l ? esc(l) : tbd('licence'));
         if (u) parts.push('<a href=\"' + esc(u) + '\" target=\"_blank\" rel=\"noopener\">source</a>');
         return 'Photo: ' + parts.join(' &middot; ');
       }
@@ -209,7 +236,8 @@ ui <- fluidPage(
           (common ? '<div class=\"common\">' + esc(common) + '</div>' : '');
         document.getElementById('big-credit').innerHTML = creditHTML(ds);
         var n = cards().length;
-        document.getElementById('big-nav').innerHTML = n > 1 ? '&larr; &rarr; previous / next photo' : '';
+        document.getElementById('big-nav').innerHTML = n > 1 ? 'Keyboard: &larr; &rarr; previous / next photo, Esc close' : '';
+        document.querySelectorAll('#big .navbtn').forEach(function(b) { b.style.display = n > 1 ? '' : 'none'; });
         document.getElementById('big-side').style.display = 'flex';
         document.getElementById('tb-comments').style.display = COMMENTS_URL ? '' : 'none';
         if (window.profileHTML) {
@@ -308,7 +336,7 @@ ui <- fluidPage(
         var b = document.getElementById('big');
         if (b.style.display === 'block' && !b.contains(e.target) && e.target.tagName !== 'IMG') hideBig();
       });
-    ", comments_url)))
+    "))
   ),
   tags$script(HTML(paste0("var INFO_ARR = ", info_json, ";"))),
   tags$script(HTML(r"---(
@@ -339,10 +367,11 @@ ui <- fluidPage(
         if (isNA(p)) return isNA(txt) ? NA_() : txt;
         p = Math.min(100, Math.max(0, +p));
         var top = Math.max(1, Math.round(100 - p));
-        return '<span class="bar" title="' + (word || 'Higher than') + ' ' + Math.round(p) + '% of mammal species"><span style="width:' +
+        var long = !isNA(txt) && String(txt).replace(/<[^>]*>/g, '').length > 34;   // very long author lists may wrap
+        return '<span class="' + (long ? '' : 'rk') + '"><span class="bar" title="' + (word || 'Higher than') + ' ' + Math.round(p) + '% of mammal species"><span style="width:' +
                Math.max(2, p) + '%"></span></span> ' + (isNA(txt) ? '' : txt + ' ') +
                '<span class="muted" title="' + (word || 'Higher than') + ' ' + Math.round(p) + '% of mammal species">' +
-               (isNA(txt) ? '' : '&middot; ') + 'top ' + top + '%</span>';
+               (isNA(txt) ? '' : '&middot; ') + 'top ' + top + '%</span></span>';
       }
       function score(x, p) { return isNA(x) ? NA_() : rankBar(p, (+x).toFixed(2)); }
       // Variable tooltips (hover over the label)
@@ -440,7 +469,10 @@ ui <- fluidPage(
       function profileHTML(sp) {
         var r = INFO[sp];
         if (!r) return '<div class="com-meta">No data available for this species.</div>';
-        var h = '<div class="pf-h">Attention, range &amp; discovery</div><table class="pf">' +
+        var h = '<div class="pf-h">Attention, range &amp; discovery</div>' +
+          '<div class="pf-note">Bars = rank among all mammal species (full bar = highest value). ' +
+          '&ldquo;Top 7%&rdquo; means only 7% of mammal species score higher; for <i>Described</i>, ' +
+          'only 7% were described earlier.</div><table class="pf">' +
           row('Academic', score(r.acad, r.acad_pct)) + row('Public', score(r.public, r.public_pct)) +
           row('Range', isNA(r.range_pct) ? NA_() : rankBar(r.range_pct, null)) +
           row('iNaturalist', isNA(r.inat_n_rg) ? NA_() : rankBar(r.inat_pct, nf(r.inat_n_rg) + ' obs.')) +
@@ -496,7 +528,10 @@ ui <- fluidPage(
       span(class = "close", title = "Close (Esc)", onclick = "hideBig()", HTML("&times;")),
       span(id = "big-nav", class = "nav"),
       div(class = "big-wrap",
-        div(tags$img(id = "big-img", src = ""), div(id = "big-credit", class = "credit"), div(id = "big-cap", class = "cap")),
+        div(div(class = "imgwrap", tags$img(id = "big-img", src = ""),
+                tags$button(type = "button", class = "navbtn prev", title = "Previous photo (\u2190)", onclick = "stepBig(-1)", HTML("&#8249;")),
+                tags$button(type = "button", class = "navbtn next", title = "Next photo (\u2192)", onclick = "stepBig(1)", HTML("&#8250;"))),
+            div(id = "big-credit", class = "credit"), div(id = "big-cap", class = "cap")),
         div(id = "big-side", class = "big-side",
           div(class = "tabs",
             tags$button(id = "tb-profile", type = "button", class = "tab on", onclick = "showTab('profile')", "Profile"),
@@ -522,6 +557,7 @@ ui <- fluidPage(
     if (comments_url != "") div(class = "f-chk", checkboxInput("only_com", "Only photos with comments", FALSE))),
   div(class = "sub", sprintf(if (comments_url != "") "%s species, %d families, %d orders, %s photos \u2014 click a photo to enlarge it and leave a comment" else "%s species, %d families, %d orders, %s photos \u2014 click a photo to enlarge it",
                              format(nrow(sp_tab), big.mark = ","), nrow(fam_tab), nrow(ord_tab), format(nrow(img), big.mark = ","))),
+  div(class = "busy-ind", div(class = "spin"), "Loading photos..."),
   uiOutput("gallery")
 )
 
