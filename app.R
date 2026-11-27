@@ -322,8 +322,9 @@ ui <- fluidPage(
         if (!r) return '<div class="com-meta">No data available for this species.</div>';
         var h = '<div class="pf-h">Attention &amp; range</div><table class="pf">' +
           row('Academic', score(r.acad, r.acad_pct)) + row('Public', score(r.public, r.public_pct)) +
-          row('Range', isNA(r.range_pct) ? NA_() : '<span class="bar" title="Range size, relative to all mammals"><span style="width:' +
-              Math.max(2, +r.range_pct) + '%"></span></span>') + '</table>';
+          row('Range', isNA(r.range_pct) ? NA_() : '<span class="bar" title="Range size (log scale, relative to the widest range)"><span style="width:' +
+              Math.max(2, +(isNA(r.range_bar) ? r.range_pct : r.range_bar)) + '%"></span></span> <span class="muted" title="Rank among all mammal species">top ' +
+              Math.max(1, 100 - (+r.range_pct)) + '%</span>') + '</table>';
         h += '<div class="pf-h">IUCN Red List</div><table class="pf">' +
           row('Category', isNA(r.iucn_cat) ? NA_() : iucnBadge(r.iucn_cat) + ' ' + esc(IUCN_NAMES[r.iucn_cat] || '') +
               (isNA(r.iucn_year) ? '' : ' <span class="muted">(' + r.iucn_year + ')</span>')) +
