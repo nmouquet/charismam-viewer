@@ -130,6 +130,7 @@ ui <- fluidPage(
       table.pf th { font-weight: 400; color: #777; width: 34%; vertical-align: top; padding: 2px 6px 2px 0; }
       table.pf td { padding: 2px 0; vertical-align: top; }
       .na { color: #aaa; }
+      .tip { border-bottom: 1px dotted #aaa; cursor: help; }
       .muted { color: #888; font-size: 12px; }
       .bar { display: inline-block; width: 60px; height: 7px; background: #e6e6e6; border-radius: 4px; vertical-align: middle; }
       .bar span { display: block; height: 100%; background: #4a8cc9; border-radius: 4px; }
@@ -269,7 +270,51 @@ ui <- fluidPage(
         return '<span class="bar"><span style="width:' + Math.round(+x * 100) + '%"></span></span> ' +
                (+x).toFixed(2) + (isNA(p) ? '' : ' <span class="muted" title="Rank among all mammal species">&middot; top ' + top + '%</span>');
       }
-      function row(k, v) { return '<tr><th>' + k + '</th><td>' + v + '</td></tr>'; }
+      // Infobulles des variables (survol du libellé)
+      var TIPS = {
+        'Academic': 'Scientific attention: composite index (0-1) built from the scientific literature, citations, research fields and genetic sequences (NCBI). Bar = index; top x% = rank among all mammal species.',
+        'Public': 'Public attention: composite index (0-1) built from Wikipedia page views, the number of common names and Flickr photos. Bar = index; top x% = rank among all mammal species.',
+        'Range': 'Geographic range size (number of occupied grid cells). Bar on a log scale relative to the widest range; top x% = rank among all mammal species.',
+        'Category': 'IUCN Red List category of the latest global assessment (year in brackets).',
+        'Population trend': 'Population trend reported in the IUCN Red List assessment.',
+        'Threats': 'Number of threats coded in the IUCN assessment, followed by the broad threat groups (IUCN Threats Classification, level 1).',
+        'Uses': 'Uses and trade documented in the IUCN assessment (IUCN Use and Trade Classification).',
+        'Appendix': 'Strictest CITES Appendix found in the trade records (I = most restricted). Inferred from trade, not from the official listing.',
+        'Shipments': 'Number of shipment records in the CITES Trade Database for this species (first and last year in brackets).',
+        'Countries': 'Number of distinct importing and exporting countries in the CITES trade records.',
+        'Wild / captive': 'Shipments of wild-sourced specimens (source W) versus captive-bred or born in captivity (sources C, D, F).',
+        'Main purpose': 'Most frequent declared purpose of the CITES shipments.',
+        'Main source': 'Most frequent declared source of the CITES specimens.',
+        'Main item': 'Most frequent type of item traded (live animals, skins, trophies, specimens...).',
+        'Gu&eacute;nard et al. 2025': 'Conservation projects funding this species and total amount (US$), from Gu\u00e9nard et al. 2025.',
+        'Buxton et al. 2020': 'Conservation / recovery budget reported for this species in Buxton et al. 2020, summed over jurisdictions (US$).',
+        'InvaCost (invasion costs)': 'Reported economic costs of the species as an invader (InvaCost 4.1, 2017 US$). NA = no cost reported, not evidence of no impact.',
+        'Pathogens': 'Host-pathogen associations in CLOVER 1.0. A pathogen is zoonotic when it is also recorded in humans. Counts depend on research effort.',
+        'By type': 'Number of distinct pathogens by group (CLOVER 1.0).',
+        'Visitor hazard': 'Hazard to zoo visitors (UK Standards of Modern Zoo Practice, 2025, Appendix B): 1A highest, 1 greater, 2 less, 3 least risk. Listed mostly by genus: a species inherits the category of its genus; unlisted taxa are category 3.',
+        'Held in zoos (ZIMS)': 'Whether the species is recorded in zoos or aquariums of the ZIMS network (Species360), via DSKI (Conde et al. 2019).',
+        'Demographic knowledge': 'Demographic Species Knowledge Index (Conde et al. 2019): how much is known on mortality and fertility (None / Low / Fair / High).',
+        'Body mass': 'Adult body mass (COMBINE, otherwise EltonTraits).',
+        'Max longevity': 'Maximum recorded age at death (COMBINE).',
+        'Litter size': 'Mean number of young per litter (COMBINE).',
+        'Litters per year': 'Mean number of litters per year (COMBINE).',
+        'Gestation': 'Mean gestation length (COMBINE).',
+        'Generation length': 'Average age of parents of the current cohort, as used by the IUCN (COMBINE).',
+        'Realm': 'Biogeographical realm(s) occupied (COMBINE).',
+        'Habitats': 'Number of IUCN habitat types used (habitat breadth, COMBINE).',
+        'Home range': 'Mean home range size of individuals or groups (COMBINE).',
+        'Density': 'Mean population density (COMBINE).',
+        'Group size': 'Mean social group size (COMBINE).',
+        'Hibernation / torpor': 'Whether the species hibernates or uses daily torpor (COMBINE).',
+        'Diet': 'Main diet class (EltonTraits).',
+        'Foraging stratum': 'Main foraging stratum (EltonTraits).',
+        'Activity': 'Daily activity pattern (EltonTraits).'
+      };
+      function row(k, v) {
+        var t = TIPS[k];
+        var lab = t ? '<span class="tip" title="' + t.replace(/"/g, '&quot;') + '">' + k + '</span>' : k;
+        return '<tr><th>' + lab + '</th><td>' + v + '</td></tr>';
+      }
       function num(x, d) { return isNA(x) ? NA_() : (+x).toFixed(d).replace(/\.0$/, ''); }
       function sig(x) { x = +x; return x >= 100 ? Math.round(x).toLocaleString('en-US') : +x.toPrecision(3) + ''; }
       function yrs(d) { return isNA(d) ? NA_() : (+d / 365.25).toFixed(+d >= 3652 ? 0 : 1).replace(/\.0$/, '') + ' years'; }
@@ -348,7 +393,7 @@ ui <- fluidPage(
           row('Demographic knowledge', isNA(r.dski_mort) && isNA(r.dski_fert) ? NA_() :
               'mortality ' + txt(r.dski_mort) + ' &middot; fertility ' + txt(r.dski_fert)) + '</table>';
         h += '<div class="pf-h">Body</div><table class="pf">' +
-          row('Body mass', mass(r.bodymass_g)) + row('Body length', len(r.length_mm)) + '</table>';
+          row('Body mass', mass(r.bodymass_g)) + row('<span title="Tip of the nose to the base of the tail (tail excluded), COMBINE">Head&ndash;body length</span>', len(r.length_mm)) + '</table>';
         h += '<div class="pf-h">Life history</div><table class="pf">' +
           row('Max longevity', yrs(r.longevity_d)) +
           row('Litter size', num(r.litter_size, 1)) +
