@@ -313,6 +313,8 @@ ui <- fluidPage(
         'Visitor hazard': 'Hazard to zoo visitors (UK Standards of Modern Zoo Practice, 2025, Appendix B): 1A highest, 1 greater, 2 less, 3 least risk. Listed mostly by genus: a species inherits the category of its genus; unlisted taxa are category 3.',
         'Held in zoos (ZIMS)': 'Whether the species is recorded in zoos or aquariums of the ZIMS network (Species360), via DSKI (Conde et al. 2019).',
         'Demographic knowledge': 'Demographic Species Knowledge Index (Conde et al. 2019): how much is known on mortality and fertility (None / Low / Fair / High).',
+        'Description': 'Year the species was formally described (Mammal Diversity Database v2.5). Bar on a linear scale from the most recent description (empty) to 1758, Linnaeus (full); top x% = among the earliest described mammal species.',
+        'Described': 'Authority and year of the original description (MDD v2.5). Parentheses mean the species was first described in another genus.',
         'Body mass': 'Adult body mass (COMBINE, otherwise EltonTraits).',
         'Max longevity': 'Maximum recorded age at death (COMBINE).',
         'Litter size': 'Mean number of young per litter (COMBINE).',
@@ -392,7 +394,11 @@ ui <- fluidPage(
           row('iNaturalist', isNA(r.inat_n_rg) ? NA_() : '<span class="bar"><span style="width:' +
               Math.max(+r.inat_n_rg > 0 ? 2 : 0, +r.inat_bar) + '%"></span></span> ' + nf(r.inat_n_rg) + ' obs.' +
               (isNA(r.inat_pct) ? '' : ' <span class="muted" title="Rank among all mammal species">&middot; top ' +
-              Math.max(1, 100 - (+r.inat_pct)) + '%</span>')) + '</table>';
+              Math.max(1, 100 - (+r.inat_pct)) + '%</span>')) +
+          row('Description', isNA(r.desc_year) ? NA_() : '<span class="bar"><span style="width:' +
+              Math.max(2, +r.desc_bar) + '%"></span></span> ' + r.desc_year +
+              (isNA(r.desc_pct) ? '' : ' <span class="muted" title="Rank among all mammal species (earliest described first)">&middot; top ' +
+              Math.max(1, 100 - (+r.desc_pct)) + '%</span>')) + '</table>';
         h += '<div class="pf-h">IUCN Red List</div><table class="pf">' +
           row('Category', isNA(r.iucn_cat) ? NA_() : iucnBadge(r.iucn_cat) + ' ' + esc(IUCN_NAMES[r.iucn_cat] || '') +
               (isNA(r.iucn_year) ? '' : ' <span class="muted">(' + r.iucn_year + ')</span>')) +
@@ -416,7 +422,7 @@ ui <- fluidPage(
           row('Demographic knowledge', isNA(r.dski_mort) && isNA(r.dski_fert) ? NA_() :
               'mortality ' + txt(r.dski_mort) + ' &middot; fertility ' + txt(r.dski_fert)) + '</table>';
         h += '<div class="pf-h">Body</div><table class="pf">' +
-          row('Body mass', mass(r.bodymass_g)) + row('<span title="Tip of the nose to the base of the tail (tail excluded), COMBINE">Head&ndash;body length</span>', len(r.length_mm)) + '</table>';
+          row('Body mass', mass(r.bodymass_g)) + row('<span title="Tip of the nose to the base of the tail (tail excluded), COMBINE">Head&ndash;body length</span>', len(r.length_mm)) + row('Described', isNA(r.desc_author) ? NA_() : r.desc_author) + '</table>';
         h += '<div class="pf-h">Life history</div><table class="pf">' +
           row('Max longevity', yrs(r.longevity_d)) +
           row('Litter size', num(r.litter_size, 1)) +
