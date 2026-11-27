@@ -363,7 +363,7 @@ ui <- fluidPage(
       }
       // Every bar = rank among all mammal species: bar length = share of species with a
       // lower value (p, 0-100); "top x%" = share of species above. Full bar = highest.
-      function rankBar(p, txt, word) {
+      function rankBar(p, txt, word, suffix) {
         if (isNA(p)) return isNA(txt) ? NA_() : txt;
         p = Math.min(100, Math.max(0, +p));
         var top = Math.max(1, Math.round(100 - p));
@@ -371,7 +371,7 @@ ui <- fluidPage(
         return '<span class="' + (long ? '' : 'rk') + '"><span class="bar" title="' + (word || 'Higher than') + ' ' + Math.round(p) + '% of mammal species"><span style="width:' +
                Math.max(2, p) + '%"></span></span> ' + (isNA(txt) ? '' : txt + ' ') +
                '<span class="muted" title="' + (word || 'Higher than') + ' ' + Math.round(p) + '% of mammal species">' +
-               (isNA(txt) ? '' : '&middot; ') + 'top ' + top + '%</span></span>';
+               (isNA(txt) ? '' : '&middot; ') + 'top ' + top + '%' + (suffix ? ' ' + suffix : '') + '</span></span>';
       }
       function score(x, p) { return isNA(x) ? NA_() : rankBar(p, (+x).toFixed(2)); }
       // Variable tooltips (hover over the label)
@@ -470,14 +470,12 @@ ui <- fluidPage(
         var r = INFO[sp];
         if (!r) return '<div class="com-meta">No data available for this species.</div>';
         var h = '<div class="pf-h">Attention, range &amp; discovery</div>' +
-          '<div class="pf-note">Bars = rank among all mammal species (full bar = highest value). ' +
-          '&ldquo;Top 7%&rdquo; means only 7% of mammal species score higher; for <i>Described</i>, ' +
-          'only 7% were described earlier.</div><table class="pf">' +
+          '<div class="pf-note">Rank among all mammals: top 5% = only 5% rank higher.</div><table class="pf">' +
           row('Academic', score(r.acad, r.acad_pct)) + row('Public', score(r.public, r.public_pct)) +
           row('Range', isNA(r.range_pct) ? NA_() : rankBar(r.range_pct, null)) +
           row('iNaturalist', isNA(r.inat_n_rg) ? NA_() : rankBar(r.inat_pct, nf(r.inat_n_rg) + ' obs.')) +
           row('Described', isNA(r.desc_year) ? NA_() :
-              rankBar(r.desc_pct, esc(isNA(r.desc_author) ? String(r.desc_year) : r.desc_author), 'Described earlier than')) + '</table>';
+              rankBar(r.desc_pct, esc(isNA(r.desc_author) ? String(r.desc_year) : r.desc_author), 'Described earlier than', 'oldest')) + '</table>';
         h += '<div class="pf-h">IUCN Red List</div><table class="pf">' +
           row('Category', isNA(r.iucn_cat) ? NA_() : iucnBadge(r.iucn_cat) + ' ' + esc(IUCN_NAMES[r.iucn_cat] || '') +
               (isNA(r.iucn_year) ? '' : ' <span class="muted">(' + r.iucn_year + ')</span>')) +
