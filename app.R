@@ -115,6 +115,8 @@ ui <- fluidPage(
       .iucn-LC { background: #60c659; } .iucn-NT { background: #a8c63a; } .iucn-VU { background: #e8c400; color: #222; }
       .iucn-EN { background: #fc7f3f; } .iucn-CR { background: #d81e05; } .iucn-EW { background: #542344; }
       .iucn-EX { background: #000; } .iucn-DD { background: #b5b5ab; }
+      .haz { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; color: #fff; }
+      .haz-1A { background: #8b0000; } .haz-1 { background: #d9480f; } .haz-2 { background: #e8a200; } .haz-3 { background: #9aa39a; }
       .head h3 .iucn { margin-left: 8px; font-size: 13px; }
       .tabs { display: flex; gap: 4px; border-bottom: 1px solid #ddd; margin-bottom: 8px; }
       .tab { border: 1px solid transparent; border-bottom: none; background: none; padding: 5px 12px; font-size: 13.5px;
@@ -268,6 +270,24 @@ ui <- fluidPage(
                (+x).toFixed(2) + (isNA(p) ? '' : ' <span class="muted" title="Rank among all mammal species">&middot; top ' + top + '%</span>');
       }
       function row(k, v) { return '<tr><th>' + k + '</th><td>' + v + '</td></tr>'; }
+      function num(x, d) { return isNA(x) ? NA_() : (+x).toFixed(d).replace(/\.0$/, ''); }
+      function sig(x) { x = +x; return x >= 100 ? Math.round(x).toLocaleString('en-US') : +x.toPrecision(3) + ''; }
+      function yrs(d) { return isNA(d) ? NA_() : (+d / 365.25).toFixed(+d >= 3652 ? 0 : 1).replace(/\.0$/, '') + ' years'; }
+      function len(mm) {
+        if (isNA(mm)) return NA_();
+        mm = +mm;
+        return mm >= 1000 ? (mm / 1000).toFixed(2).replace(/0$/, '') + ' m' : (mm >= 100 ? Math.round(mm / 10) : (mm / 10).toFixed(1)) + ' cm';
+      }
+      var HAZ = { '1A': 'Highest risk', '1': 'Greater risk', '2': 'Less risk', '3': 'Least risk' };
+      var HAZ_FLAG = { K: 'kicking', V: 'venom', E: 'electric', P: 'pecking' };
+      function hazardHTML(r) {
+        if (isNA(r.hazard)) return NA_();
+        var c = String(r.hazard);
+        var fl = isNA(r.hazard_flags) ? '' : String(r.hazard_flags).split('').map(function(f) { return HAZ_FLAG[f] || f; }).join(', ');
+        return '<span class="haz haz-' + c + '" title="UK Standards of Modern Zoo Practice (2025), Appendix B">Cat. ' + c + '</span> ' +
+               HAZ[c] + (fl ? ' <span class="muted">(special risk: ' + fl + ')</span>' : '') +
+               (isNA(r.hazard_cond) ? '' : '<br><span class="muted">' + esc(r.hazard_cond) + '</span>');
+      }
       var CITES_PURPOSE = { T: 'Commercial', Z: 'Zoo', S: 'Scientific', P: 'Personal', H: 'Hunting trophy',
                             Q: 'Circus / travelling exhibition', M: 'Medical', E: 'Educational', B: 'Captive breeding',
                             N: 'Reintroduction', L: 'Law enforcement', G: 'Botanical garden' };
@@ -300,8 +320,10 @@ ui <- fluidPage(
       function profileHTML(sp) {
         var r = INFO[sp];
         if (!r) return '<div class="com-meta">No data available for this species.</div>';
-        var h = '<div class="pf-h">Attention</div><table class="pf">' +
-          row('Academic', score(r.acad, r.acad_pct)) + row('Public', score(r.public, r.public_pct)) + '</table>';
+        var h = '<div class="pf-h">Attention &amp; range</div><table class="pf">' +
+          row('Academic', score(r.acad, r.acad_pct)) + row('Public', score(r.public, r.public_pct)) +
+          row('Range', isNA(r.range_pct) ? NA_() : '<span class="bar" title="Range size, relative to all mammals"><span style="width:' +
+              Math.max(2, +r.range_pct) + '%"></span></span>') + '</table>';
         h += '<div class="pf-h">IUCN Red List</div><table class="pf">' +
           row('Category', isNA(r.iucn_cat) ? NA_() : iucnBadge(r.iucn_cat) + ' ' + esc(IUCN_NAMES[r.iucn_cat] || '') +
               (isNA(r.iucn_year) ? '' : ' <span class="muted">(' + r.iucn_year + ')</span>')) +
@@ -320,12 +342,26 @@ ui <- fluidPage(
           row('InvaCost (invasion costs)', isNA(r.invacost_usd) ? NA_() : 'US$ ' + money(r.invacost_usd)) + '</table>';
         h += '<div class="pf-h">Zoonoses (CLOVER 1.0)</div><table class="pf">' + zooRows(r) + '</table>';
         h += '<div class="pf-h">Zoos (ZIMS / DSKI)</div><table class="pf">' +
+          row('Visitor hazard', hazardHTML(r)) +
           row('Held in zoos (ZIMS)', isNA(r.zims) ? NA_() : (r.zims ? 'Yes' : 'No')) +
           row('Demographic knowledge', isNA(r.dski_mort) && isNA(r.dski_fert) ? NA_() :
               'mortality ' + txt(r.dski_mort) + ' &middot; fertility ' + txt(r.dski_fert)) + '</table>';
-        h += '<div class="pf-h">Traits</div><table class="pf">' +
-          row('Body mass', mass(r.bodymass_g)) + row('Diet', txt(r.diet)) +
-          row('Foraging stratum', txt(r.forstrat)) + row('Activity', txt(r.activity)) + '</table>';
+        h += '<div class="pf-h">Body</div><table class="pf">' +
+          row('Body mass', mass(r.bodymass_g)) + row('Body length', len(r.length_mm)) + '</table>';
+        h += '<div class="pf-h">Life history</div><table class="pf">' +
+          row('Max longevity', yrs(r.longevity_d)) +
+          row('Litter size', num(r.litter_size, 1)) +
+          row('Litters per year', num(r.litters_yr, 1)) +
+          row('Gestation', isNA(r.gestation_d) ? NA_() : Math.round(+r.gestation_d) + ' days') +
+          row('Generation length', yrs(r.generation_d)) + '</table>';
+        h += '<div class="pf-h">Ecology</div><table class="pf">' +
+          row('Realm', txt(r.realm)) +
+          row('Habitats', isNA(r.n_habitats) ? NA_() : r.n_habitats + ' habitat type' + (+r.n_habitats > 1 ? 's' : '')) +
+          row('Home range', isNA(r.home_range_km2) ? NA_() : sig(r.home_range_km2) + ' km&sup2;') +
+          row('Density', isNA(r.density_km2) ? NA_() : sig(r.density_km2) + ' ind./km&sup2;') +
+          row('Group size', num(r.group_size, 1)) +
+          row('Hibernation / torpor', isNA(r.hibernation) ? NA_() : (+r.hibernation ? 'Yes' : 'No')) +
+          row('Diet', txt(r.diet)) + row('Foraging stratum', txt(r.forstrat)) + row('Activity', txt(r.activity)) + '</table>';
         return h;
       }
       function showTab(t) {
