@@ -268,6 +268,35 @@ ui <- fluidPage(
                (+x).toFixed(2) + (isNA(p) ? '' : ' <span class="muted" title="Rank among all mammal species">&middot; top ' + top + '%</span>');
       }
       function row(k, v) { return '<tr><th>' + k + '</th><td>' + v + '</td></tr>'; }
+      var CITES_PURPOSE = { T: 'Commercial', Z: 'Zoo', S: 'Scientific', P: 'Personal', H: 'Hunting trophy',
+                            Q: 'Circus / travelling exhibition', M: 'Medical', E: 'Educational', B: 'Captive breeding',
+                            N: 'Reintroduction', L: 'Law enforcement', G: 'Botanical garden' };
+      var CITES_SOURCE  = { W: 'Wild', C: 'Captive-bred', F: 'Born in captivity (F1)', R: 'Ranched',
+                            D: 'Captive-bred (App. I, registered)', I: 'Confiscated / seized', O: 'Pre-Convention',
+                            U: 'Unknown', X: 'Marine (high seas)', A: 'Artificially propagated' };
+      function nf(x) { return (+x).toLocaleString('en-US'); }
+      function zooRows(r) {
+        if (isNA(r.zoo_status)) return row('Status', NA_());
+        if (r.zoo_status === 'not_sampled') return row('Status', 'No host&ndash;pathogen record');
+        var pl = function(n, w) { return nf(n) + ' ' + w + (+n === 1 ? '' : 's'); };
+        return row('Pathogens', pl(r.zoo_n_path, 'pathogen') + ' known &middot; <b>' + nf(r.zoo_n_zoon) + ' zoonotic</b>' +
+                               (isNA(r.zoo_n_refs) ? '' : ' <span class="muted">(' + pl(r.zoo_n_refs, 'reference') + ')</span>')) +
+               row('By type', pl(r.zoo_virus, 'virus').replace('viruss', 'viruses') + ' &middot; ' + nf(r.zoo_bacteria) + ' bacteria &middot; ' +
+                              pl(r.zoo_helminth, 'helminth') + ' &middot; ' + nf(r.zoo_protozoa) + ' protozoa &middot; ' + nf(r.zoo_fungi) + ' fungi');
+      }
+      function citesRows(r) {
+        if (isNA(r.cites_in_db)) return row('Status', NA_());
+        if (!r.cites_in_db || +r.cites_n_ship === 0) return row('Status', 'Not listed / no trade recorded');
+        var yrs = isNA(r.cites_first) ? '' : ' <span class="muted">(' + r.cites_first + (r.cites_last && r.cites_last !== r.cites_first ? '&ndash;' + r.cites_last : '') + ')</span>';
+        var dec = function(d, c) { return isNA(c) ? NA_() : esc(d[c] || c); };
+        return row('Appendix', isNA(r.cites_app) ? NA_() : 'Appendix ' + esc(r.cites_app)) +
+               row('Shipments', nf(r.cites_n_ship) + yrs) +
+               row('Countries', isNA(r.cites_n_imp) ? NA_() : nf(r.cites_n_imp) + ' importers &middot; ' + nf(r.cites_n_exp) + ' exporters') +
+               row('Wild / captive', isNA(r.cites_wild) ? NA_() : nf(r.cites_wild) + ' wild &middot; ' + nf(r.cites_captive) + ' captive') +
+               row('Main purpose', dec(CITES_PURPOSE, r.cites_purpose)) +
+               row('Main source', dec(CITES_SOURCE, r.cites_source)) +
+               row('Main item', txt(r.cites_term));
+      }
       function profileHTML(sp) {
         var r = INFO[sp];
         if (!r) return '<div class="com-meta">No data available for this species.</div>';
@@ -282,12 +311,18 @@ ui <- fluidPage(
         h += '<div class="pf-h">Use &amp; trade (IUCN)</div><table class="pf">' +
           row('Uses', isNA(r.ut_n) ? NA_() : (+r.ut_n === 0 ? 'None recorded' :
               r.ut_n + (r.uses ? ' <span class="muted">&mdash; ' + esc(r.uses) + '</span>' : ''))) + '</table>';
+        h += '<div class="pf-h">CITES trade</div><table class="pf">' + citesRows(r) + '</table>';
         h += '<div class="pf-h">Conservation funding</div><table class="pf">' +
           row('Gu&eacute;nard et al. 2025', isNA(r.guenard_projects) ? NA_() :
               r.guenard_projects + ' project' + (+r.guenard_projects > 1 ? 's' : '') +
               (isNA(r.guenard_usd) ? '' : ' &middot; US$ ' + money(r.guenard_usd))) +
           row('Buxton et al. 2020', isNA(r.buxton_budget) ? NA_() : 'US$ ' + money(r.buxton_budget)) +
           row('InvaCost (invasion costs)', isNA(r.invacost_usd) ? NA_() : 'US$ ' + money(r.invacost_usd)) + '</table>';
+        h += '<div class="pf-h">Zoonoses (CLOVER 1.0)</div><table class="pf">' + zooRows(r) + '</table>';
+        h += '<div class="pf-h">Zoos (ZIMS / DSKI)</div><table class="pf">' +
+          row('Held in zoos (ZIMS)', isNA(r.zims) ? NA_() : (r.zims ? 'Yes' : 'No')) +
+          row('Demographic knowledge', isNA(r.dski_mort) && isNA(r.dski_fert) ? NA_() :
+              'mortality ' + txt(r.dski_mort) + ' &middot; fertility ' + txt(r.dski_fert)) + '</table>';
         h += '<div class="pf-h">Traits</div><table class="pf">' +
           row('Body mass', mass(r.bodymass_g)) + row('Diet', txt(r.diet)) +
           row('Foraging stratum', txt(r.forstrat)) + row('Activity', txt(r.activity)) + '</table>';
