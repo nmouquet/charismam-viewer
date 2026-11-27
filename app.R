@@ -386,7 +386,7 @@ ui <- fluidPage(
       function profileHTML(sp) {
         var r = INFO[sp];
         if (!r) return '<div class="com-meta">No data available for this species.</div>';
-        var h = '<div class="pf-h">Attention &amp; range</div><table class="pf">' +
+        var h = '<div class="pf-h">Attention, range &amp; discovery</div><table class="pf">' +
           row('Academic', score(r.acad, r.acad_pct)) + row('Public', score(r.public, r.public_pct)) +
           row('Range', isNA(r.range_pct) ? NA_() : '<span class="bar" title="Range size (log scale, relative to the widest range)"><span style="width:' +
               Math.max(2, +(isNA(r.range_bar) ? r.range_pct : r.range_bar)) + '%"></span></span> <span class="muted" title="Rank among all mammal species">top ' +
@@ -398,7 +398,8 @@ ui <- fluidPage(
           row('Description', isNA(r.desc_year) ? NA_() : '<span class="bar"><span style="width:' +
               Math.max(2, +r.desc_bar) + '%"></span></span> ' + r.desc_year +
               (isNA(r.desc_pct) ? '' : ' <span class="muted" title="Rank among all mammal species (earliest described first)">&middot; top ' +
-              Math.max(1, 100 - (+r.desc_pct)) + '%</span>')) + '</table>';
+              Math.max(1, 100 - (+r.desc_pct)) + '%</span>')) +
+          row('Described', isNA(r.desc_author) ? NA_() : r.desc_author) + '</table>';
         h += '<div class="pf-h">IUCN Red List</div><table class="pf">' +
           row('Category', isNA(r.iucn_cat) ? NA_() : iucnBadge(r.iucn_cat) + ' ' + esc(IUCN_NAMES[r.iucn_cat] || '') +
               (isNA(r.iucn_year) ? '' : ' <span class="muted">(' + r.iucn_year + ')</span>')) +
@@ -422,7 +423,7 @@ ui <- fluidPage(
           row('Demographic knowledge', isNA(r.dski_mort) && isNA(r.dski_fert) ? NA_() :
               'mortality ' + txt(r.dski_mort) + ' &middot; fertility ' + txt(r.dski_fert)) + '</table>';
         h += '<div class="pf-h">Body</div><table class="pf">' +
-          row('Body mass', mass(r.bodymass_g)) + row('<span title="Tip of the nose to the base of the tail (tail excluded), COMBINE">Head&ndash;body length</span>', len(r.length_mm)) + row('Described', isNA(r.desc_author) ? NA_() : r.desc_author) + '</table>';
+          row('Body mass', mass(r.bodymass_g)) + row('<span title="Tip of the nose to the base of the tail (tail excluded), COMBINE">Head&ndash;body length</span>', len(r.length_mm)) + '</table>';
         h += '<div class="pf-h">Life history</div><table class="pf">' +
           row('Max longevity', yrs(r.longevity_d)) +
           row('Litter size', num(r.litter_size, 1)) +
