@@ -255,7 +255,7 @@ ui <- fluidPage(
         document.getElementById('big').style.display = 'block';
       }
       function comItem(x, showPhoto) {
-        return '<div class=\"com-item\"><div class=\"com-meta\"><b>' + esc(x.name) + '</b> &middot; ' + esc(x.date) +
+        return '<div class=\"com-item\"><div class=\"com-meta\"><b>' + esc(x.name) + '</b>' +
                (showPhoto && x.photo ? ' &middot; photo ' + esc(x.photo) : '') +
                '</div><div class=\"com-text\">' + esc(x.comment) + '</div></div>';
       }
